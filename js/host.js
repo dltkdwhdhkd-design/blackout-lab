@@ -35,14 +35,14 @@ window.HostView = (function () {
     ctx.fillStyle = teamColors[idx % 8]; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
     const fixed = w.fuses.filter(f => f.fixed).length;
     const alive = [...w.players.values()];
-    const status = w.phase === "end" ? ({ escaped: "전원 탈출", partial: "일부 탈출", lost: "전멸", timeout: "시간 초과" })[w.result] : `${fmt(w.time)} · 부품 ${fixed}/${w.settings.requiredFuses}${w.exitOpen ? " · 출구 열림" : ""}`;
+    const status = w.introT > 0 ? "시작 연출 중" : w.phase === "end" ? ({ escaped: "전원 탈출", partial: "일부 탈출", lost: "전멸", timeout: "시간 초과" })[w.result] : `${fmt(w.time)} · 셀 ${fixed}/${w.settings.requiredFuses}${w.exitOpen ? " · 출구 열림" : ""}`;
     ctx.fillText(`${idx + 1}팀  ${status}`, x, y - 8);
     ctx.fillStyle = "#aaa"; ctx.font = "12px sans-serif"; ctx.textAlign = "right";
     ctx.fillText(alive.map(p => (p.escaped ? "✓" : p.down ? "✕" : "●") + p.name).join("  "), x + wd, y - 8);
     // 맵
     for (let ty = 0; ty < MAP_H; ty++) for (let tx = 0; tx < MAP_W; tx++) {
       const t = MapUtil.tile(tx, ty);
-      ctx.fillStyle = t === "#" ? "#262a31" : (MapUtil.roomAt(tx + 0.5, ty + 0.5) || {}).id === "hall" ? "#3b4049" : "#4a4238";
+      const rm = MapUtil.roomAt(tx + 0.5, ty + 0.5) || {}; ctx.fillStyle = t === "#" ? "#262a31" : rm.tex === "hall" ? "#3b4049" : rm.tex === "contain" ? "#4a3a3a" : rm.tex === "power" ? "#3a3f38" : "#4a4238";
       if (t === "E") ctx.fillStyle = w.exitOpen ? "#2e8b3a" : "#7a2020";
       if (t === "L") ctx.fillStyle = "#33404f";
       ctx.fillRect(ox + tx * T, oy + ty * T, T, T);
@@ -50,8 +50,8 @@ window.HostView = (function () {
     for (const f of w.fuses) { ctx.fillStyle = f.fixed ? "#58ff7a" : "#ff4040"; ctx.fillRect(ox + f.x * T + T * 0.2, oy + f.y * T + T * 0.2, T * 0.6, T * 0.6); }
     const b = MapUtil.find("B")[0]; ctx.fillStyle = w.exitOpen ? "#58ff7a" : "#ffb020"; ctx.fillRect(ox + b.x * T, oy + b.y * T, T, T);
     // 방 이름
-    ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.font = `${Math.max(8, T * 1.1)}px sans-serif`; ctx.textAlign = "center";
-    for (const r of ROOMS) if (r.id !== "hall") ctx.fillText(r.name, ox + (r.x0 + r.x1 + 1) / 2 * T, oy + (r.y0 + r.y1 + 1) / 2 * T + T * 1.5);
+    ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.font = `${Math.max(8, T * 1.3)}px sans-serif`; ctx.textAlign = "center";
+    for (const r of ROOMS) if (!r.id.startsWith("hall")) ctx.fillText(r.name, ox + (r.x0 + r.x1 + 1) / 2 * T, oy + (r.y0 + r.y1 + 1) / 2 * T + T * 1.5);
     // 플레이어
     let i = 0;
     for (const p of w.players.values()) {
@@ -80,7 +80,7 @@ window.HostView = (function () {
       const fixed = w.fuses.filter(f => f.fixed).length;
       const res = ({ escaped: "전원 탈출", partial: "일부 탈출", lost: "전멸", timeout: "시간 초과" })[w.result] || "진행 중";
       html += `<section class="res-team"><h3 style="color:${teamColors[i % 8]}">${i + 1}팀 — ${res}</h3>
-        <p>탈출 ${w.escaped}/${w.players.size}명 · 부품 ${fixed}/11 · 오답 ${w.wrongs.length}개 · 잡힌 횟수 ${[...w.players.values()].reduce((a, p) => a + p.caught, 0)}</p>`;
+        <p>탈출 ${w.escaped}/${w.players.size}명 · 에너지 셀 ${fixed}/${w.fuses.length} · 오답 ${w.wrongs.length}개 · 잡힌 횟수 ${[...w.players.values()].reduce((a, p) => a + p.caught, 0)}</p>`;
       if (w.wrongs.length) {
         html += `<table><tr><th>학생</th><th>단원</th><th>문제</th><th>고른 답</th><th>정답 · 해설</th></tr>`;
         for (const wr of w.wrongs) {

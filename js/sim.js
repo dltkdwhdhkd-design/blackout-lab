@@ -1,11 +1,14 @@
 // 호스트 쪽 시뮬레이션 — 팀마다 독립된 세계(괴물·퓨즈·소음)를 돌린다
 window.Sim = (function () {
   const PLAYER_SPEED = 3.0;
-  const DEFAULTS = { timeLimit: 720, safeTime: 45, monsterSpeed: 1.0, requiredFuses: 7, teamSize: 4, scare: 2 };
+  const INTRO_LEN = 16;
+  const DEFAULTS = { timeLimit: 900, safeTime: 75, monsterSpeed: 1.0, requiredFuses: 9, teamSize: 4, scare: 2, intro: 1 };
 
   function createWorld(team, settings) {
-    const m0 = MapUtil.find("M")[0];
+    const mf = MapUtil.find("M")[0];
+    const m0 = window.INTRO ? { x: INTRO.mstart[0] - 0.5, y: INTRO.mstart[1] - 0.5 } : mf;
     return {
+      introT: settings.intro ? INTRO_LEN : 0,
       team, settings,
       players: new Map(),
       monster: { x: m0.x + 0.5, y: m0.y + 0.5, state: "sleep", path: [], target: null, targetId: null, lastSeen: null, timer: 0, perc: 0, repath: 0, speed: 0, a: 0, loseLos: 0 },
@@ -217,7 +220,17 @@ window.Sim = (function () {
       else { mo.timer -= dt; mo.a += dt * 1.5; if (mo.timer <= 0) { mo.state = "roam"; mo.path = []; } }
       return;
     }
-    // roam
+    // roam — 넓은 건물에서 길을 잃지 않도록 가끔 누군가의 기척을 느낀다
+    mo.sense = (mo.sense === undefined ? 35 : mo.sense) - dt;
+    if (mo.sense <= 0) {
+      mo.sense = 28 + Math.random() * 24;
+      const cands = [...w.players.values()].filter(p => !p.down && !p.escaped && !p.hid);
+      if (cands.length) {
+        const p = cands[Math.floor(Math.random() * cands.length)];
+        const path = MapUtil.bfs(mo.x, mo.y, p.x + (Math.random() - 0.5) * 4, p.y + (Math.random() - 0.5) * 4) || MapUtil.bfs(mo.x, mo.y, p.x, p.y);
+        if (path) { mo.state = "hunt"; mo.path = path; emit(w, { k: "hunt" }); return; }
+      }
+    }
     if (!mo.path.length) { const t = randomRoomTarget(w); mo.path = MapUtil.bfs(mo.x, mo.y, t.x, t.y) || []; if (!mo.path.length) mo.path = []; }
     followPath(mo, ROAM, dt);
   }
@@ -247,6 +260,7 @@ window.Sim = (function () {
 
   function tick(w, dt) {
     if (w.phase !== "play") return;
+    if (w.introT > 0) { w.introT -= dt; return; }
     w.elapsed += dt; w.time -= dt;
     w.noise = Math.max(0, w.noise - 4 * dt);
     // 구조 / 자연 회복
@@ -273,7 +287,7 @@ window.Sim = (function () {
       m: [+mo.x.toFixed(2), +mo.y.toFixed(2), mo.state, +mo.a.toFixed(2), +mo.speed.toFixed(1)],
       p: [...w.players.values()].map(p => [p.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.a.toFixed(2), p.down ? 1 : 0, p.hid ? 1 : 0, p.escaped ? 1 : 0, p.down ? +p.rev.toFixed(1) : 0]),
       f: mask, b: w.breaker.stage, e: w.exitOpen ? 1 : 0, n: Math.round(w.noise), tm: Math.max(0, Math.round(w.time)), ph: w.phase,
-      req: w.settings.requiredFuses, safe: Math.max(0, Math.round(w.settings.safeTime - w.elapsed)),
+      req: w.settings.requiredFuses, safe: Math.max(0, Math.round(w.settings.safeTime - w.elapsed)), it: +Math.max(0, w.introT).toFixed(1),
     };
   }
 

@@ -16,6 +16,8 @@ window.Client = (function () {
   let running = false, raf = 0, last = 0, moving = false;
   let fuses = MapUtil.fuses(), breakerPos = MapUtil.find("B")[0];
   let onEnd = null, grain = null, wrongFlashT = 0, bobT = 0;
+  let intro = null, gore = false, flashOn = 1, locked = false, look = 0, mapOpen = false, mapImg = null;
+  const isTouch = ("ontouchstart" in window) && window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const colors = ["#7ec8ff", "#ffd27e", "#9dff8a", "#ff9ad5", "#c9a6ff", "#ffb48a"];
   const el = id => document.getElementById(id);
 
@@ -27,13 +29,14 @@ window.Client = (function () {
     const sp = MapUtil.find("S")[opts.spawnIndex % 6 || 0];
     pos = { x: sp.x + 0.5, y: sp.y + 0.5, a: 0 };
     down = false; hidden = null; escaped = false; phase = "play"; modal = null; others.clear();
-    setupInput(); makeGrain();
+    setupInput(); makeGrain(); mapImg = null; mapOpen = false; look = 0;
     running = true; last = performance.now();
     raf = requestAnimationFrame(frame);
     Horror.init(); Horror.resume();
-    showToast("정전이다. 발전기 부품을 모아 출구를 열어라. 그것과 마주치지 마라.", 5);
+    gore = false; flashOn = 1;
+    if (settings && settings.intro) beginIntro(); else { gore = true; showToast("정전이다. 실험실 단말기에서 에너지 셀을 회수해 발전기를 돌려라. 그것이 건물 안에 있다.", 6); }
   }
-  function stop() { running = false; cancelAnimationFrame(raf); }
+  function stop() { running = false; cancelAnimationFrame(raf); if (document.pointerLockElement) document.exitPointerLock(); Horror.siren(false); }
   function resize() { W = cv.width = window.innerWidth; H = cv.height = window.innerHeight; Fps.setup(W, H); }
   function makeGrain() {
     grain = document.createElement("canvas"); grain.width = grain.height = 128;
@@ -44,7 +47,12 @@ window.Client = (function () {
 
   // ---------- 입력: 왼쪽 스틱 이동, 오른쪽 드래그 회전 ----------
   function setupInput() {
-    window.onkeydown = e => { keys[e.key.toLowerCase()] = true; if (e.key === " " || e.key.toLowerCase() === "e") { e.preventDefault(); interactPress(); } if (e.key === "Escape" && modal) cancelModal(); };
+    window.onkeydown = e => {
+      const k = e.key.toLowerCase(); keys[k] = true;
+      if (k === " " || k === "e") { e.preventDefault(); interactPress(); }
+      if ((k === "m" || k === "tab") && !e.repeat) { e.preventDefault(); if (!intro && !modal) mapOpen = !mapOpen; }
+      if (e.key === "Escape") { if (modal) cancelModal(); mapOpen = false; }
+    };
     window.onkeyup = e => { keys[e.key.toLowerCase()] = false; if (e.key === " " || e.key.toLowerCase() === "e") interactRelease(); };
     const stick = el("stick"), knob = el("stick-knob"), zone = el("touch-zone");
     let sid = null, sx = 0, sy = 0, tid = null, tx = 0;
@@ -61,15 +69,28 @@ window.Client = (function () {
           if (d > 0) { dx = dx / d * m; dy = dy / d * m; }
           knob.style.transform = `translate(${dx}px,${dy}px)`;
           input.fwd = d > 8 ? -dy / 50 : 0; input.strafe = d > 8 ? dx / 50 : 0;
-        } else if (t.identifier === tid) { const dx = t.clientX - tx; tx = t.clientX; pos.a += dx * 0.0075; }
+        } else if (t.identifier === tid && !intro && !mapOpen) { const dx = t.clientX - tx; tx = t.clientX; pos.a += dx * 0.0075; }
       }
     }, { passive: true });
     const endT = e => { for (const t of e.changedTouches) { if (t.identifier === sid) { sid = null; input.fwd = input.strafe = 0; stick.style.display = "none"; knob.style.transform = ""; } if (t.identifier === tid) tid = null; } };
     zone.addEventListener("touchend", endT); zone.addEventListener("touchcancel", endT);
-    let md = false, mx = 0;
-    zone.addEventListener("mousedown", e => { md = true; mx = e.clientX; });
-    window.addEventListener("mousemove", e => { if (md) { pos.a += (e.clientX - mx) * 0.005; mx = e.clientX; } });
-    window.addEventListener("mouseup", () => md = false);
+    // 마우스: 화면을 한 번 클릭하면 커서가 잠기고, 그다음부터는 마우스만 움직여도 시점이 돈다 (Esc로 해제)
+    zone.addEventListener("pointerdown", e => {
+      if (e.pointerType !== "mouse") return;
+      if (!locked) {
+        if (!modal && zone.requestPointerLock) { try { const r = zone.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (err) {} }
+        return;
+      }
+      if (e.button === 0) interactPress();
+    });
+    zone.addEventListener("pointerup", e => { if (e.pointerType === "mouse" && locked) interactRelease(); });
+    document.addEventListener("pointerlockchange", () => { locked = document.pointerLockElement === zone; });
+    document.addEventListener("mousemove", e => {
+      if (!locked || !running || intro || modal || mapOpen) return;
+      pos.a += (e.movementX || 0) * 0.0024;
+      look = Math.max(-0.28, Math.min(0.28, look - (e.movementY || 0) * 0.0015));
+    });
+    el("btn-map").onclick = () => { if (!intro && !modal) mapOpen = !mapOpen; };
     const btn = el("btn-act");
     btn.onpointerdown = e => { e.preventDefault(); interactPress(); };
     btn.onpointerup = btn.onpointerleave = btn.onpointercancel = () => interactRelease();
@@ -86,7 +107,7 @@ window.Client = (function () {
     return null;
   }
   function interactPress() {
-    if (!running || down || escaped || modal || phase !== "play") return;
+    if (!running || down || escaped || modal || intro || mapOpen || phase !== "play") return;
     const n = nearest(); if (!n) return;
     if (n.kind === "fuse") Net.sendToHost({ t: "q", fuse: n.fuse.id });
     else if (n.kind === "breaker") Net.sendToHost({ t: "q", fuse: -1 });
@@ -120,17 +141,17 @@ window.Client = (function () {
     switch (e.k) {
       case "q": if (e.id === me) openModal(e); break;
       case "fuse":
-        if (e.ok) { Horror.right(); if (e.id === me && modal) modalResult(true); else showToast(`${e.by}: ${e.fuse === -1 ? "발전기 가동" : "부품 확보"}`, 2.5); }
+        if (e.ok) { Horror.right(); if (e.id === me && modal) modalResult(true); else showToast(`${e.by}: ${e.fuse === -1 ? "발전기 가동" : "에너지 셀 회수"}`, 2.5); }
         else { Horror.wrong(); fx.static = 1; wrongFlashT = 1.2; if (e.id === me && modal) modalResult(false); else showToast(`${e.by} 오답 — 경보가 울렸다. 그것이 소리를 들었다.`, 3); }
         break;
-      case "locked": if (e.id === me) showToast(`발전기 부품이 모자란다. ${e.need}개 더 찾아야 한다.`, 3); break;
+      case "locked": if (e.id === me) showToast(`에너지 셀이 모자란다. ${e.need}개 더 회수해야 한다.`, 3); break;
       case "cool": if (e.id === me) showToast(`잠겨 있다. ${e.left}초 뒤 다시.`, 2); break;
       case "wake": Horror.bang(); fx.shake = 1; showToast("…건물 어딘가에서 무언가가 깨어났다.", 4); Horror.vibrate([80, 60, 200]); break;
       case "hunt": Horror.scrape(); break;
       case "spotted": if (e.id === me) { fx.spotted = 1; Horror.scrape(); Horror.vibrate([60, 40, 60, 40, 200]); showToast("들켰다. 뛰어.", 2); } break;
       case "caught": if (e.id === me) jumpScare(); else { Horror.bang(); showToast(`${e.name}이(가) 쓰러졌다. 찾아가서 구해야 한다.`, 4); fx.shake = 0.6; } break;
       case "revived": if (e.id === me) { down = false; fx.fade = 1; showToast(e.self ? "정신이 돌아왔다." : "팀원이 깨워 줬다.", 3); } else showToast(`${names[e.id] || "팀원"}이(가) 일어났다.`, 2); break;
-      case "exit": Horror.right(); showToast("발전기 가동! 출구가 열렸다. 건물 오른쪽 아래 출구로.", 5); break;
+      case "exit": Horror.right(); showToast("발전기 가동! 보안 출구가 열렸다. 남동쪽 끝, 보안 출구로.", 5); break;
       case "escaped": if (e.id === me) { escaped = true; Horror.lightsOn(); } else showToast(`${e.name} 탈출 성공`, 2.5); break;
       case "end": phase = "end"; if (onEnd) onEnd(e); break;
     }
@@ -140,8 +161,10 @@ window.Client = (function () {
   function openModal(e) {
     const item = QUESTION_BANK[e.unit].items[e.qi];
     modal = { fuse: e.fuse, unit: e.unit, qi: e.qi, item, t0: performance.now(), answered: false, result: null };
+    if (document.pointerLockElement) document.exitPointerLock(); // 보기 클릭을 위해 커서 풀기
+    mapOpen = false;
     el("modal").style.display = "flex";
-    el("modal-title").textContent = (e.fuse === -1 ? "비상 발전기 · " : "부품 상자 · ") + QUESTION_BANK[e.unit].name;
+    el("modal-title").textContent = (e.fuse === -1 ? "비상 발전기 · 보안 인증 · " : "단말기 · 보안 인증 · ") + QUESTION_BANK[e.unit].name;
     el("modal-q").textContent = item.q;
     const box = el("modal-choices"); box.innerHTML = "";
     item.c.forEach((c, i) => { const b = document.createElement("button"); b.textContent = c; b.onclick = () => answer(i); box.appendChild(b); });
@@ -157,13 +180,97 @@ window.Client = (function () {
   function modalResult(ok) {
     if (!modal) return;
     [...el("modal-choices").children].forEach((b, j) => { if (j === modal.item.a) b.classList.add("correct"); else if (j === modal.chosen) b.classList.add("wrong"); });
-    el("modal-exp").textContent = (ok ? "부품 확보. " : "오답 — 경보! 그것이 이쪽으로 온다. 상자는 15초 잠김. ") + modal.item.e;
+    el("modal-exp").textContent = (ok ? "인증 성공 — 에너지 셀 회수. " : "인증 실패 — 경보! 그것이 이쪽으로 온다. 단말기 15초 잠김. ") + modal.item.e;
     setTimeout(closeModal, ok ? 1500 : 2300);
   }
   function cancelModal() { if (!modal || modal.answered) return; Net.sendToHost({ t: "cancelq", fuse: modal.fuse }); closeModal(); }
   function closeModal() { modal = null; el("modal").style.display = "none"; }
   function showToast(text, sec) { toast = { text, t: sec }; }
   function jumpScare() { Horror.screech(); Horror.vibrate([400, 80, 600]); fx.jump = 1; fx.jumpT0 = performance.now(); fx.shake = 1.5; closeModal(); }
+
+  // ---------- 인트로: 격리 실패 ----------
+  const P = a => ({ x: a[0], y: a[1] });
+  const IN = { cam: { x: INTRO.cam[0], y: INTRO.cam[1], a: INTRO.camA },
+    cell: { x: 8.5, y: 5.2 }, cellDoor: { x: 8.5, y: 7.5 }, door: { x: 8.5, y: 11.2 },
+    r1: P(INTRO.r1), r2: P(INTRO.r2), r3: { x: 17.0, y: 13.5 }, r2end: P(INTRO.kill2), r3end: { x: 19.5, y: 9.6 },
+    m1: { x: 9.3, y: 12.4 }, m2: { x: 16.0, y: 12.9 }, lunge: { x: INTRO.cam[0] - 2.0, y: INTRO.cam[1] } };
+  const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
+  const lerpP = (A, B, t) => ({ x: lerp(A.x, B.x, t), y: lerp(A.y, B.y, t) });
+  function beginIntro() {
+    intro = { t0: performance.now(), t: 0, ambient: 0.9, done: {}, text: "", sub: "", flash: 0, red: 0, shake: 0, black: 0 };
+    el("hud").style.visibility = "hidden"; el("btn-act").style.visibility = "hidden"; el("stick").style.display = "none";
+  }
+  function finishIntro() {
+    intro = null; flashOn = 1; gore = true; Horror.siren(false);
+    el("hud").style.visibility = ""; el("btn-act").style.visibility = "";
+    showToast(`발전기를 돌려야 보안문이 열린다. 실험실 단말기에서 에너지 셀 ${settings.requiredFuses}개를 회수하라. …그것은 아직 이 건물 안에 있다.`, 7);
+  }
+  function once(key, fn) { if (!intro.done[key]) { intro.done[key] = true; fn(); } }
+  function updateIntro(dt, now) {
+    const I = intro; I.t = (now - I.t0) / 1000; const t = I.t;
+    I.flash *= Math.pow(0.001, dt); I.shake *= Math.pow(0.02, dt);
+    if (t < 3) { I.text = "지하 3층 · 격리 연구동"; I.sub = "23:47"; }
+    if (t >= 3) once("alarm", () => { Horror.siren(true); Horror.vibrate([100, 50, 100]); });
+    if (t >= 3 && t < 11.5) { I.text = "⚠ 격리 실패 — 개체 K-7"; I.sub = "전 구역 봉쇄 · 보안 인력 대기"; I.red = 0.5 + 0.5 * Math.sin(t * 9); }
+    if (t >= 5) once("bang", () => { Horror.bang(); I.shake = 1.2; });
+    if (t >= 6.4) once("kill1", () => { Horror.screech(); I.shake = 1; I.flash = 0.6; });
+    if (S && S.it > 0) I.sawIt = true;
+    if (S && S.it <= 0 && !I.sawIt && t < 13) { finishIntro(); return; } // 늦게 들어온 학생은 연출 생략
+    if (t >= 7.0) once("shatter1", () => { Horror.shatter(); I.flash = 1; I.ambient = 0.6; });
+    if (t >= 8.8) once("kill2", () => { Horror.screech(); I.shake = 1.3; I.flash = 0.5; Horror.vibrate([200, 80, 300]); });
+    if (t >= 9.2) once("shatter2", () => { Horror.shatter(); Horror.spark(); I.flash = 1; I.ambient = 0.3; });
+    if (t >= 10.2) once("shatter3", () => { Horror.shatter(); I.flash = 1; I.ambient = 0.08; Horror.siren(false); });
+    if (t >= 11.5) once("lunge", () => { Horror.screech(); Horror.vibrate([500, 100, 500]); I.flash = 1.5; I.black = 1; I.text = ""; I.sub = ""; });
+    if (t >= 13.5) { I.text = "…눈을 떴다."; I.sub = "중앙 홀. 조용하다. 비상등도 꺼졌다."; }
+    if (t >= 15.0) once("click", () => { Horror.click(); I.black = 0; I.text = ""; I.sub = ""; flashOn = 0; });
+    if (t >= 15.0) flashOn = Math.min(1, flashOn + dt * 1.6);
+    if (t >= 16.3) once("end", finishIntro);
+  }
+  function renderIntro(now) {
+    const I = intro, t = I.t;
+    if (I.black) { ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H); if (t > 12.5) { drawIntroText(ctx, I, 0.55); } postFx(ctx, now); return; }
+    const extra = [];
+    // 연구원
+    const r1 = t < 6.4 ? { kind: t > 4.5 ? "researcher_run" : "researcher", ...IN.r1 } : null;
+    const r2 = t < 8.8 ? { kind: t > 4.5 ? "researcher_run" : "researcher", ...(t < 6.6 ? IN.r2 : lerpP(IN.r2, IN.r2end, (t - 6.6) / 2.2)) } : null;
+    const r3 = { kind: t > 4.5 ? "researcher_run" : "researcher", ...(t < 6.8 ? IN.r3 : lerpP(IN.r3, IN.r3end, (t - 6.8) / 2.6)) };
+    for (const r of [r1, r2, r3]) if (r) extra.push(r);
+    // 시체는 gore 플래그로 Fps 가 그림 (BODIES 첫 둘)
+    // 괴물 경로
+    let m = null, still = false;
+    if (t >= 5.0 && t < 5.5) m = lerpP(IN.cell, IN.cellDoor, (t - 5.0) / 0.5);
+    else if (t >= 5.5 && t < 6.0) m = lerpP(IN.cellDoor, IN.door, (t - 5.5) / 0.5);
+    else if (t >= 6.0 && t < 6.4) m = lerpP(IN.door, IN.m1, (t - 6.0) / 0.4);
+    else if (t >= 6.4 && t < 7.4) { m = IN.m1; still = true; }
+    else if (t >= 7.4 && t < 8.8) m = lerpP(IN.m1, IN.m2, (t - 7.4) / 1.4);
+    else if (t >= 8.8 && t < 9.8) { m = IN.m2; still = true; }
+    else if (t >= 9.8) m = lerpP(IN.m2, IN.lunge, (t - 9.8) / 1.7);
+    if (m) extra.push({ kind: "monster", x: m.x, y: m.y, frame: still ? (Math.floor(now / 160) % 3 ? 3 : 0) : [0, 1, 0, 2][Math.floor(now / 110) % 4] });
+    if (t >= 6.4) extra.push({ kind: "body", x: INTRO.kill1[0], y: INTRO.kill1[1] });
+    if (t >= 8.8) extra.push({ kind: "body2", x: INTRO.kill2[0], y: INTRO.kill2[1] });
+    const sh = I.shake * 14;
+    ctx.save(); ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh);
+    const cam = { x: IN.cam.x, y: IN.cam.y, a: IN.cam.a + (t > 9.8 ? Math.sin(t * 30) * 0.01 : 0) };
+    // 전등 깜빡임: 깨진 뒤엔 불안정
+    const amb = I.ambient * (I.ambient < 0.9 && Math.random() < 0.15 ? 0.4 : 1);
+    Fps.render(ctx, W, H, { pos: cam, fuses, fmask: 0, exitOpen: false, flicker: I.ambient < 0.2 ? 0.6 : 0.15, monster: { state: "sleep" }, others: [], now, downed: false, moving: false, pitch: 0, gore: false, ambient: amb, extra, noHand: true });
+    ctx.restore();
+    if (I.red > 0 && t >= 3 && t < 11.5) { ctx.fillStyle = `rgba(255,0,0,${0.08 + I.red * 0.14})`; ctx.fillRect(0, 0, W, H); }
+    if (I.flash > 0.02) { ctx.fillStyle = `rgba(255,255,255,${Math.min(1, I.flash)})`; ctx.fillRect(0, 0, W, H); }
+    // 스파크
+    if (I.ambient < 0.9 && Math.random() < 0.5) { ctx.fillStyle = "#ffd98a"; for (let i = 0; i < 6; i++) ctx.fillRect(W * (0.3 + Math.random() * 0.4), H * 0.1 + Math.random() * H * 0.25, 2, 2 + Math.random() * 8); }
+    drawIntroText(ctx, I, 0.12);
+    // 레터박스
+    ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H * 0.07); ctx.fillRect(0, H * 0.93, W, H * 0.07);
+    postFx(ctx, now);
+  }
+  function drawIntroText(c, I, yFrac) {
+    if (!I.text) return;
+    c.textAlign = "center";
+    c.fillStyle = I.text.startsWith("⚠") ? "#ff4a4a" : "#e8e2d6";
+    c.font = `bold ${Math.min(W, H) * 0.05}px sans-serif`; c.fillText(I.text, W / 2, H * yFrac + Math.min(W, H) * 0.08);
+    c.fillStyle = "rgba(232,226,214,0.75)"; c.font = `${Math.min(W, H) * 0.03}px sans-serif`; c.fillText(I.sub, W / 2, H * yFrac + Math.min(W, H) * 0.13);
+  }
 
   // ---------- 루프 ----------
   function frame(now) {
@@ -173,11 +280,12 @@ window.Client = (function () {
     raf = requestAnimationFrame(frame);
   }
   function update(dt, now) {
+    if (intro) { updateIntro(dt, now); for (const o of others.values()) { o.x = o.tx; o.y = o.ty; } mon.x = mon.tx; mon.y = mon.ty; if (now - lastPos > 500) { lastPos = now; Net.sendToHost({ t: "pos", x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), a: +pos.a.toFixed(2) }); } return; }
     let fwd = input.fwd, strafe = input.strafe, turn = 0;
     if (keys["w"] || keys["arrowup"]) fwd += 1; if (keys["s"] || keys["arrowdown"]) fwd -= 1;
     if (keys["a"]) strafe -= 1; if (keys["d"]) strafe += 1;
     if (keys["arrowleft"] || keys["q"]) turn -= 1; if (keys["arrowright"]) turn += 1;
-    const canMove = !down && !escaped && !hidden && !modal && phase === "play";
+    const canMove = !down && !escaped && !hidden && !modal && !mapOpen && phase === "play";
     moving = false;
     if (canMove) {
       pos.a += turn * 2.4 * dt;
@@ -211,18 +319,20 @@ window.Client = (function () {
   }
   function updateHud() {
     const n = nearest(); const b = el("btn-act");
-    const label = !n ? "" : n.kind === "fuse" ? "상자 열기" : n.kind === "breaker" ? "발전기" : n.kind === "hide" ? "숨기" : n.kind === "unhide" ? "나오기" : "구조 (꾹)";
+    const label = !n ? "" : n.kind === "fuse" ? "셀 회수" : n.kind === "breaker" ? "발전기 가동" : n.kind === "hide" ? "숨기" : n.kind === "unhide" ? "나오기" : "구조 (꾹)";
     b.textContent = label; b.classList.toggle("on", !!n && !down && !escaped && !modal && phase === "play");
     if (S) {
       const fixed = countBits(S.f);
       const room = MapUtil.roomAt(pos.x, pos.y);
-      el("hud-fuse").textContent = `부품 ${fixed}/${S.req}` + (S.e ? " · 출구 열림" : "") + (room ? ` · ${room.name}` : "");
+      el("hud-fuse").textContent = `에너지 셀 ${fixed}/${S.req}` + (S.e ? " · 출구 열림" : "") + (room ? ` · ${room.name}` : "");
       el("hud-time").textContent = fmt(S.tm);
       const md = Math.hypot(mon.x - pos.x, mon.y - pos.y);
       el("hud-noise").style.width = (mon.state === "sleep" ? 0 : Math.max(0, 100 - md * 8)) + "%";
       el("hud-safe").textContent = S.safe > 0 ? `아직 조용하다 … ${S.safe}` : "";
       el("hud-team").innerHTML = S.p.map((p, i) => `<span class="${p[4] ? 'dn' : ''} ${p[6] ? 'esc' : ''}" style="color:${colors[i % colors.length]}">${p[6] ? "✓" : p[4] ? "✕" : "●"} ${names[p[0]] || "?"}</span>`).join(" ");
     }
+    el("lock-hint").style.display = (!isTouch && !locked && !modal && !mapOpen && !escaped && !intro && !down && phase === "play") ? "block" : "none";
+    el("toast").style.visibility = mapOpen ? "hidden" : "";
     el("toast").textContent = toast.t > 0 ? toast.text : "";
     el("toast").style.opacity = toast.t > 0 ? Math.min(1, toast.t) : 0;
   }
@@ -234,18 +344,60 @@ window.Client = (function () {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = "#000"; ctx.fillRect(0, 0, W, H);
     if (escaped) { renderEscaped(); return; }
+    if (intro) { renderIntro(now); return; }
     const sh = fx.shake * 10;
     ctx.save(); ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh);
     const view = hidden ? { x: hidden.x + 0.5, y: hidden.y + 0.5, a: hidePrev ? hidePrev.a + Math.PI : pos.a } : pos;
     Fps.render(ctx, W, H, {
-      pos: view, fuses, fmask: S ? S.f : 0, exitOpen: !!(S && S.e), flicker: hidden ? 0.25 : (down ? 0.3 : fx.flicker),
-      monster: mon, others: [...others.values()], now, downed: down, moving, pitch: Math.sin(bobT) * (moving ? 4 : 0),
+      pos: view, fuses, fmask: S ? S.f : 0, exitOpen: !!(S && S.e), flicker: (hidden ? 0.25 : (down ? 0.3 : fx.flicker)) * flashOn,
+      monster: mon, others: [...others.values()], now, downed: down, moving, pitch: Math.sin(bobT) * (moving ? 4 : 0), gore,
+      look: hidden ? 0 : look,
     });
     ctx.restore();
     if (hidden) drawLockerSlit(ctx);
     if (down) drawDowned(ctx, now);
     postFx(ctx, now);
+    if (mapOpen && !fx.jump) drawMap(ctx, now);
     if (fx.jump) drawJumpScare(ctx, now);
+  }
+
+  // ---------- 안내도 (M) ----------
+  const ROOM_COL = { lab: "#3d3a34", hall: "#2c3035", contain: "#4a2e2e", power: "#2f3a30" };
+  function buildMap() {
+    const s = 8, c = document.createElement("canvas"); c.width = MAP_W * s; c.height = MAP_H * s;
+    const g = c.getContext("2d");
+    g.fillStyle = "#0b0c0e"; g.fillRect(0, 0, c.width, c.height);
+    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) {
+      const t = MapUtil.tile(x, y); if (t === "#") continue;
+      const r = MapUtil.roomAt(x + 0.5, y + 0.5);
+      g.fillStyle = t === "E" ? "#7a2a2a" : r ? ROOM_COL[r.tex] || "#333" : "#333";
+      g.fillRect(x * s, y * s, s, s);
+    }
+    g.font = "bold 11px sans-serif"; g.textAlign = "center"; g.fillStyle = "rgba(230,225,215,0.8)";
+    for (const r of ROOMS) if (!r.id.startsWith("hall")) g.fillText(r.name, (r.x0 + r.x1 + 1) / 2 * s, (r.y0 + r.y1 + 1) / 2 * s + 4);
+    const b = MapUtil.find("B")[0], e = MapUtil.find("E")[0];
+    g.fillStyle = "#ffcf4a"; g.fillRect(b.x * s - 2, b.y * s - 2, s + 4, s + 4); g.textAlign = "left"; g.fillText("발전기", b.x * s + s + 4, b.y * s + 7);
+    g.textAlign = "center"; g.fillStyle = "#ff6a6a"; g.fillText("보안 출구 ▼", e.x * s + s / 2, e.y * s - 6);
+    return c;
+  }
+  function drawMap(c, now) {
+    if (!mapImg) mapImg = buildMap();
+    c.fillStyle = "rgba(0,0,0,0.9)"; c.fillRect(0, 0, W, H);
+    const k = Math.min((W - 24) / mapImg.width, (H - 130) / mapImg.height);
+    const mw = mapImg.width * k, mh = mapImg.height * k, ox = (W - mw) / 2, oy = Math.max(96, (H - mh) / 2 + 30);
+    c.drawImage(mapImg, ox, oy, mw, mh);
+    const u = k * 8;
+    let i = 0;
+    for (const [id, o] of others) { i++; if (o.esc) continue; c.fillStyle = o.down ? "#ff4a4a" : colors[(S ? S.p.findIndex(p => p[0] === id) : i) % colors.length]; c.beginPath(); c.arc(ox + o.x * u, oy + o.y * u, Math.max(3, u * 0.5), 0, 7); c.fill(); }
+    c.save(); c.translate(ox + pos.x * u, oy + pos.y * u); c.rotate(pos.a);
+    c.fillStyle = Math.floor(now / 300) % 2 ? "#ffffff" : "#9bdcff";
+    const a = Math.max(5, u * 1.4);
+    c.beginPath(); c.moveTo(a, 0); c.lineTo(-a * 0.5, -a * 0.6); c.lineTo(-a * 0.2, 0); c.lineTo(-a * 0.5, a * 0.6); c.closePath(); c.fill();
+    c.restore();
+    c.textAlign = "center"; c.fillStyle = "#e8e2d6"; c.font = `bold ${Math.max(13, Math.min(W, H) * 0.035)}px sans-serif`;
+    c.fillText("K-7 지하 연구동 안내도", W / 2, oy - 24);
+    c.font = `${Math.max(11, Math.min(W, H) * 0.026)}px sans-serif`; c.fillStyle = "#b9b0a2";
+    c.fillText("지도를 보는 동안은 움직일 수 없다 · M 또는 지도 버튼으로 닫기", W / 2, oy - 7);
   }
   function drawLockerSlit(c) {
     const snap = document.createElement("canvas"); snap.width = W; snap.height = H; snap.getContext("2d").drawImage(cv, 0, 0);

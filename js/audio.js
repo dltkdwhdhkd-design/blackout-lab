@@ -195,7 +195,47 @@ window.Horror = (function () {
     o.connect(lp); lp.connect(g); g.connect(master); o.start(t); o.stop(t + 2.6);
     droneGain.gain.setTargetAtTime(0.0, t, 1); hbGain.gain.setTargetAtTime(0, t, 1);
   }
+  // 경보 사이렌 (켜기/끄기)
+  let sirenNodes = null;
+  function siren(on) {
+    if (!ctx) return;
+    if (!on) { if (sirenNodes) { const t = now(); sirenNodes.g.gain.setTargetAtTime(0, t, 0.3); setTimeout(() => { try { sirenNodes.o.stop(); } catch (e) {} }, 800); sirenNodes = null; } return; }
+    if (sirenNodes) return;
+    const o = ctx.createOscillator(); o.type = "square"; const g = ctx.createGain(); g.gain.value = 0.0001;
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1200;
+    const lfo = ctx.createOscillator(); lfo.type = "square"; lfo.frequency.value = 1.1; const lg = ctx.createGain(); lg.gain.value = 180; lfo.connect(lg); lg.connect(o.frequency);
+    o.frequency.value = 620; o.connect(lp); lp.connect(g); g.connect(master); o.start(); lfo.start();
+    g.gain.setTargetAtTime(0.09, now(), 0.2);
+    sirenNodes = { o, g, lfo };
+  }
+  // 전등 폭발: 퍽 + 유리 파편
+  function shatter() {
+    if (!ctx) return; const t = now();
+    const pop = ctx.createOscillator(); pop.frequency.setValueAtTime(220, t); pop.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+    const pg = ctx.createGain(); pg.gain.setValueAtTime(0.8, t); pg.gain.exponentialRampToValueAtTime(0.0001, t + 0.25); pop.connect(pg); pg.connect(master); pop.start(t); pop.stop(t + 0.3);
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(1.0);
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 3000;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.5, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.9);
+    src.connect(hp); hp.connect(g); g.connect(master); src.start(t + 0.02);
+    for (let i = 0; i < 6; i++) { const o = ctx.createOscillator(); o.frequency.value = 2500 + Math.random() * 4000; const og = ctx.createGain(); const tt = t + 0.05 + Math.random() * 0.5; og.gain.setValueAtTime(0.0001, tt); og.gain.exponentialRampToValueAtTime(0.08, tt + 0.005); og.gain.exponentialRampToValueAtTime(0.0001, tt + 0.12); o.connect(og); og.connect(master); o.start(tt); o.stop(tt + 0.15); }
+  }
+  // 전기 스파크 지직
+  function spark() {
+    if (!ctx) return; const t = now();
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.3);
+    const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 4000; bp.Q.value = 2;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); for (let i = 0; i < 5; i++) { g.gain.exponentialRampToValueAtTime(0.25, t + i * 0.05 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + i * 0.05 + 0.04); }
+    src.connect(bp); bp.connect(g); g.connect(master); src.start(t);
+  }
+  // 손전등 딸깍
+  function click() {
+    if (!ctx) return; const t = now();
+    const src = ctx.createBufferSource(); src.buffer = noiseBuffer(0.04);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.6, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+    const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 1500;
+    src.connect(hp); hp.connect(g); g.connect(master); src.start(t);
+  }
   function setMuted(m) { muted = m; if (master) master.gain.setTargetAtTime(m ? 0 : 0.9, now(), 0.05); }
   function vibrate(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
-  return { init, resume, update, wrong, right, screech, scrape, bang, breath, lightsOn, whisper, setMuted, vibrate, get ready() { return !!ctx; } };
+  return { init, resume, update, wrong, right, screech, scrape, bang, breath, lightsOn, whisper, siren, shatter, spark, click, setMuted, vibrate, get ready() { return !!ctx; } };
 })();

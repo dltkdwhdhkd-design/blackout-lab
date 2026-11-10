@@ -1,7 +1,7 @@
 // 텍스처와 스프라이트 — 기본은 코드로 생성, img/ 폴더에 같은 이름의 PNG가 있으면 그걸 우선 사용
-// 교체 가능한 파일: img/wall.png img/locker.png img/fuse_off.png img/fuse_on.png img/breaker.png img/exit_closed.png img/exit_open.png
-//                 img/monster_0.png ~ img/monster_3.png (세로로 긴 투명 PNG, 4프레임) img/mate.png img/mate_down.png img/scare.png
+// 교체 가능한 파일 목록은 docs/art-requests.md 참고
 window.Assets = (function () {
+  const PROVIDED = ["monster_0", "monster_1", "monster_2", "monster_3", "scare"];
   const TEX = 64;
   const tex = {}, spr = {};
   let rng = mulberry(7);
@@ -15,44 +15,70 @@ window.Assets = (function () {
   const clamp = v => v < 0 ? 0 : v > 255 ? 255 : v;
 
   // ---------- 벽 텍스처 ----------
-  function wallBase(c, tint) {
-    const g = c.getContext("2d");
-    g.fillStyle = tint; g.fillRect(0, 0, TEX, TEX);
-    // 타일 줄눈
-    g.fillStyle = "rgba(0,0,0,0.45)";
-    for (let y = 0; y < TEX; y += 16) { g.fillRect(0, y, TEX, 1); const off = (y / 16) % 2 ? 16 : 0; for (let x = off; x < TEX; x += 32) g.fillRect(x, y, 1, 16); }
-    // 얼룩
-    for (let i = 0; i < 6; i++) { g.fillStyle = `rgba(${20 + rng() * 30},${10 + rng() * 20},${10 + rng() * 15},${0.15 + rng() * 0.3})`; g.beginPath(); g.ellipse(rng() * TEX, rng() * TEX, 4 + rng() * 12, 3 + rng() * 10, rng() * 3, 0, 7); g.fill(); }
-    // 흘러내린 자국
-    for (let i = 0; i < 3; i++) { const x = rng() * TEX; g.fillStyle = "rgba(10,5,5,0.35)"; g.fillRect(x, rng() * 20, 1 + rng() * 2, 20 + rng() * 40); }
-    noise(g, TEX, TEX, 0.18, 0);
+  function grime(g, n, dark) {
+    for (let i = 0; i < n; i++) { g.fillStyle = `rgba(${20 + rng() * 30},${15 + rng() * 20},${10 + rng() * 15},${0.1 + rng() * 0.25})`; g.beginPath(); g.ellipse(rng() * TEX, rng() * TEX, 4 + rng() * 12, 3 + rng() * 10, rng() * 3, 0, 7); g.fill(); }
+    for (let i = 0; i < 3; i++) { const x = rng() * TEX; g.fillStyle = "rgba(10,5,5,0.3)"; g.fillRect(x, rng() * 20, 1 + rng() * 2, 20 + rng() * 40); }
+  }
+  // 실험실: 흰 타일 벽, 아래쪽 띠
+  function labWall(blood) {
+    const c = cv(TEX, TEX), g = c.getContext("2d");
+    g.fillStyle = "#b9b6ac"; g.fillRect(0, 0, TEX, TEX);
+    g.fillStyle = "rgba(0,0,0,0.25)";
+    for (let y = 0; y < TEX; y += 12) { g.fillRect(0, y, TEX, 1); const off = (y / 12) % 2 ? 12 : 0; for (let x = off; x < TEX; x += 24) g.fillRect(x, y, 1, 12); }
+    g.fillStyle = "#5f6b61"; g.fillRect(0, 50, TEX, 14); g.fillStyle = "rgba(0,0,0,0.35)"; g.fillRect(0, 50, TEX, 1);
+    grime(g, 5, 0);
+    if (blood) {
+      for (let i = 0; i < 3; i++) { g.fillStyle = `rgba(${90 + rng() * 40},${5 + rng() * 10},${5 + rng() * 10},0.85)`; g.beginPath(); g.ellipse(rng() * TEX, 10 + rng() * 30, 5 + rng() * 10, 4 + rng() * 8, rng() * 3, 0, 7); g.fill();
+        for (let k = 0; k < 4; k++) { const x = rng() * TEX; g.fillRect(x, 20 + rng() * 10, 1 + rng() * 2, 10 + rng() * 30); } }
+      // 손자국
+      g.fillStyle = "rgba(110,10,10,0.7)"; const hx = 10 + rng() * 40, hy = 20 + rng() * 20; g.beginPath(); g.ellipse(hx, hy + 6, 5, 7, 0, 0, 7); g.fill(); for (let f = 0; f < 4; f++) g.fillRect(hx - 5 + f * 3, hy - 8, 1.6, 9);
+    }
+    noise(g, TEX, TEX, 0.14, 0);
     return c;
   }
+  // 격리실: 콘크리트 + 경고 띠
+  function containWall() {
+    const c = cv(TEX, TEX), g = c.getContext("2d");
+    g.fillStyle = "#5a5a58"; g.fillRect(0, 0, TEX, TEX);
+    g.fillStyle = "rgba(0,0,0,0.3)"; g.fillRect(0, 31, TEX, 2); g.fillRect(31, 0, 2, TEX);
+    for (let i = 0; i < 8; i++) { g.fillStyle = "#d8b21a"; g.beginPath(); g.moveTo(i * 16 - 8, 46); g.lineTo(i * 16, 46); g.lineTo(i * 16 - 8, 58); g.lineTo(i * 16 - 16, 58); g.closePath(); g.fill(); }
+    g.fillStyle = "#151515"; g.fillRect(0, 44, TEX, 2); g.fillRect(0, 58, TEX, 2);
+    g.fillStyle = "#c33"; g.font = "bold 7px sans-serif"; g.textAlign = "center"; g.fillText("K-7", 32, 20);
+    grime(g, 6, 0); noise(g, TEX, TEX, 0.16, 0); return c;
+  }
+  // 복도: 회색 패널
+  function hallWall() {
+    const c = cv(TEX, TEX), g = c.getContext("2d");
+    g.fillStyle = "#6a6e70"; g.fillRect(0, 0, TEX, TEX);
+    g.fillStyle = "#5a5e60"; g.fillRect(2, 2, 60, 28); g.fillRect(2, 34, 60, 28);
+    g.fillStyle = "rgba(255,255,255,0.08)"; g.fillRect(2, 2, 60, 1); g.fillRect(2, 34, 60, 1);
+    g.fillStyle = "#2d3a44"; g.fillRect(0, 30, TEX, 3);
+    grime(g, 4, 0); noise(g, TEX, TEX, 0.12, 0); return c;
+  }
+  // 발전기실/창고: 어두운 금속
+  function powerWall() {
+    const c = cv(TEX, TEX), g = c.getContext("2d");
+    g.fillStyle = "#3b3f3e"; g.fillRect(0, 0, TEX, TEX);
+    g.fillStyle = "rgba(0,0,0,0.35)"; for (let y = 0; y < TEX; y += 16) g.fillRect(0, y, TEX, 2);
+    g.fillStyle = "#6a6e6c"; for (let y = 4; y < TEX; y += 16) for (let x = 4; x < TEX; x += 20) g.fillRect(x, y, 2, 2);
+    g.fillStyle = "#7a5a1a"; g.fillRect(10, 20, 44, 6); g.fillStyle = "#111"; g.font = "5px sans-serif"; g.textAlign = "center"; g.fillText("HIGH VOLTAGE", 32, 25);
+    grime(g, 5, 0); noise(g, TEX, TEX, 0.14, 0); return c;
+  }
   function makeTextures() {
-    tex.wall = wallBase(cv(TEX, TEX), "#4a5048");
-    tex.wall2 = wallBase(cv(TEX, TEX), "#524c44");
+    tex.wall = labWall(false); tex.wall2 = labWall(false); tex.wall_blood = labWall(true);
+    tex.contain = containWall(); tex.contain_blood = (() => { const c = containWall(), g = c.getContext("2d"); for (let i = 0; i < 4; i++) { g.fillStyle = "rgba(110,8,8,0.85)"; g.beginPath(); g.ellipse(rng() * TEX, rng() * 40, 6 + rng() * 10, 5 + rng() * 8, 0, 0, 7); g.fill(); } return c; })();
+    tex.hall = hallWall(); tex.hall_blood = (() => { const c = hallWall(), g = c.getContext("2d"); for (let i = 0; i < 3; i++) { g.fillStyle = "rgba(110,8,8,0.8)"; g.beginPath(); g.ellipse(rng() * TEX, 10 + rng() * 30, 6 + rng() * 10, 5 + rng() * 8, 0, 0, 7); g.fill(); for (let k = 0; k < 3; k++) g.fillRect(rng() * TEX, 25, 1.5, 10 + rng() * 30); } return c; })();
+    tex.power = powerWall();
     // 사물함
     { const c = cv(TEX, TEX), g = c.getContext("2d"); g.fillStyle = "#3a4654"; g.fillRect(0, 0, TEX, TEX);
       for (const x of [2, 34]) { g.fillStyle = "#2a333d"; g.fillRect(x, 2, 28, 60); g.fillStyle = "#1a2129"; for (let i = 0; i < 4; i++) g.fillRect(x + 6, 8 + i * 4, 16, 1.5); g.fillStyle = "#6a7784"; g.fillRect(x + 22, 30, 3, 6); g.fillStyle = "rgba(0,0,0,0.5)"; g.fillRect(x, 2, 1, 60); g.fillRect(x + 27, 2, 1, 60); }
       noise(g, TEX, TEX, 0.12, 0); tex.locker = c; }
-    // 퓨즈/부품 상자
-    const fuse = on => { const c = wallBase(cv(TEX, TEX), "#4a5048"), g = c.getContext("2d");
-      g.fillStyle = "#30333a"; g.fillRect(14, 12, 36, 40); g.fillStyle = "#1b1d22"; g.fillRect(17, 15, 30, 34);
-      g.fillStyle = on ? "#2b6a35" : "#6a1d1d"; g.fillRect(20, 18, 24, 14);
-      g.fillStyle = on ? "#7dff8f" : "#ff3b3b"; g.beginPath(); g.arc(32, 40, 3.5, 0, 7); g.fill();
-      if (!on) { g.fillStyle = "#ffd34a"; g.font = "bold 12px sans-serif"; g.textAlign = "center"; g.fillText("?", 32, 29); }
-      g.fillStyle = "rgba(255,255,255,0.08)"; g.fillRect(14, 12, 36, 2); return c; };
-    tex.fuse_off = fuse(false); tex.fuse_on = fuse(true);
-    // 발전기 패널
-    { const c = wallBase(cv(TEX, TEX), "#3e4140"), g = c.getContext("2d"); g.fillStyle = "#2a2c30"; g.fillRect(4, 6, 56, 54); g.fillStyle = "#15171a"; g.fillRect(7, 9, 50, 48);
-      for (let i = 0; i < 6; i++) { g.fillStyle = i % 2 ? "#5a1414" : "#3a3a3a"; g.fillRect(10 + i * 8, 14, 5, 12); }
-      g.fillStyle = "#777"; g.fillRect(10, 32, 44, 2); g.fillRect(10, 38, 44, 2); g.fillStyle = "#c33"; g.fillRect(24, 44, 16, 9); g.fillStyle = "#ddd"; g.font = "7px sans-serif"; g.textAlign = "center"; g.fillText("GEN", 32, 51);
-      tex.breaker = c; }
-    // 출구 문
-    const door = open => { const c = cv(TEX, TEX), g = c.getContext("2d"); g.fillStyle = open ? "#1e4a26" : "#4a1a1a"; g.fillRect(0, 0, TEX, TEX);
-      g.fillStyle = "rgba(0,0,0,0.5)"; g.fillRect(31, 0, 2, TEX); g.fillRect(0, 0, TEX, 2); g.fillRect(0, 62, TEX, 2);
-      g.fillStyle = "#8a8a8a"; g.fillRect(26, 34, 4, 2); g.fillRect(34, 34, 4, 2);
-      g.fillStyle = open ? "#7dff8f" : "#ff5a5a"; g.fillRect(16, 6, 32, 10); g.fillStyle = "#000"; g.font = "bold 8px sans-serif"; g.textAlign = "center"; g.fillText("EXIT", 32, 14);
+    // 보안 출구 문
+    const door = open => { const c = cv(TEX, TEX), g = c.getContext("2d"); g.fillStyle = "#4a4e52"; g.fillRect(0, 0, TEX, TEX);
+      g.fillStyle = open ? "#1e4a26" : "#4a1a1a"; g.fillRect(6, 4, 52, 60);
+      g.fillStyle = "rgba(0,0,0,0.5)"; g.fillRect(31, 4, 2, 60);
+      g.fillStyle = "#8a8a8a"; g.fillRect(24, 34, 5, 2); g.fillRect(35, 34, 5, 2);
+      g.fillStyle = open ? "#7dff8f" : "#ff5a5a"; g.fillRect(14, 8, 36, 10); g.fillStyle = "#000"; g.font = "bold 7px sans-serif"; g.textAlign = "center"; g.fillText(open ? "OPEN" : "LOCKED", 32, 15);
       noise(g, TEX, TEX, 0.1, 0); return c; };
     tex.exit_closed = door(false); tex.exit_open = door(true);
   }
@@ -134,6 +160,84 @@ window.Assets = (function () {
     return c;
   }
 
+  // 실험실 단말기 (에너지 셀 보관) — 바닥에 선 기계
+  function consoleSprite(on) {
+    const W = 140, H = 220, c = cv(W, H), g = c.getContext("2d");
+    g.fillStyle = "rgba(0,0,0,0.55)"; g.beginPath(); g.ellipse(70, 210, 55, 10, 0, 0, 7); g.fill();
+    // 몸체
+    const bg = g.createLinearGradient(0, 0, W, 0); bg.addColorStop(0, "#3a3f46"); bg.addColorStop(0.5, "#5a6068"); bg.addColorStop(1, "#2e3238");
+    g.fillStyle = bg; g.fillRect(25, 90, 90, 118);
+    g.fillStyle = "#23262b"; g.fillRect(25, 200, 90, 8); g.fillRect(25, 90, 90, 4);
+    // 기울어진 패널
+    g.fillStyle = "#4a5058"; g.beginPath(); g.moveTo(20, 92); g.lineTo(120, 92); g.lineTo(112, 40); g.lineTo(28, 40); g.closePath(); g.fill();
+    // 화면
+    const sc = on ? "#1b3a2a" : "#101214"; g.fillStyle = sc; g.fillRect(36, 48, 68, 36);
+    if (on) { g.fillStyle = "#6dff9a"; g.font = "bold 9px monospace"; g.textAlign = "left"; g.fillText("CELL READY", 40, 60); g.fillStyle = "#3fa86a"; for (let i = 0; i < 5; i++) g.fillRect(40, 66 + i * 3, 20 + rng() * 40, 1.5);
+      const gl = g.createRadialGradient(70, 66, 5, 70, 66, 70); gl.addColorStop(0, "rgba(100,255,150,0.35)"); gl.addColorStop(1, "rgba(100,255,150,0)"); g.fillStyle = gl; g.fillRect(0, 0, W, 130); }
+    else { g.fillStyle = "#3a1414"; g.font = "bold 8px monospace"; g.textAlign = "left"; g.fillText("CELL REMOVED", 40, 66); }
+    // 셀 슬롯
+    g.fillStyle = "#1a1c20"; g.fillRect(45, 110, 50, 60);
+    if (on) { const cg = g.createLinearGradient(0, 115, 0, 165); cg.addColorStop(0, "#9ff0ff"); cg.addColorStop(1, "#1e8fa8"); g.fillStyle = cg; g.fillRect(55, 116, 30, 48); g.fillStyle = "rgba(255,255,255,0.5)"; g.fillRect(58, 118, 4, 44); }
+    g.fillStyle = "#777"; for (let i = 0; i < 3; i++) g.fillRect(30, 180 + i * 6, 80, 1.5);
+    // 라벨
+    g.fillStyle = "#d8b21a"; g.fillRect(28, 96, 30, 8); g.fillStyle = "#111"; g.font = "6px sans-serif"; g.fillText("ENERGY", 30, 102);
+    return c;
+  }
+  // 비상 발전기
+  function generatorSprite(on) {
+    const W = 300, H = 220, c = cv(W, H), g = c.getContext("2d");
+    g.fillStyle = "rgba(0,0,0,0.55)"; g.beginPath(); g.ellipse(150, 208, 140, 12, 0, 0, 7); g.fill();
+    const bg = g.createLinearGradient(0, 60, 0, 200); bg.addColorStop(0, "#5a5f5a"); bg.addColorStop(1, "#2a2d2a");
+    g.fillStyle = bg; g.fillRect(20, 70, 260, 135);
+    g.fillStyle = "#d8b21a"; g.fillRect(20, 70, 260, 10); g.fillStyle = "#111"; for (let i = 0; i < 13; i++) g.fillRect(20 + i * 20, 70, 10, 10);
+    // 엔진 블록
+    g.fillStyle = "#3a3d3a"; g.fillRect(40, 90, 120, 100); g.fillStyle = "#222"; for (let i = 0; i < 6; i++) g.fillRect(48 + i * 18, 95, 10, 90);
+    // 배기관
+    g.fillStyle = "#555"; g.fillRect(60, 30, 18, 50); g.fillRect(90, 40, 18, 40);
+    // 제어판
+    g.fillStyle = "#1e2024"; g.fillRect(180, 90, 85, 100);
+    for (let i = 0; i < 3; i++) { g.fillStyle = on ? "#6dff9a" : (i === 0 ? "#ff3b3b" : "#3a1414"); g.beginPath(); g.arc(195 + i * 25, 105, 5, 0, 7); g.fill(); }
+    g.fillStyle = "#333"; g.fillRect(190, 120, 65, 30); g.fillStyle = on ? "#6dff9a" : "#8a2020"; g.font = "bold 9px monospace"; g.textAlign = "center"; g.fillText(on ? "RUNNING" : "NO FUEL", 222, 139);
+    // 큰 레버
+    g.fillStyle = "#777"; g.fillRect(215, 160, 14, 8); g.fillStyle = "#c33"; g.save(); g.translate(222, 164); g.rotate(on ? 0.3 : -1.1); g.fillRect(-4, -34, 8, 36); g.restore();
+    // 셀 슬롯 줄
+    g.fillStyle = "#101214"; g.fillRect(30, 195, 240, 8);
+    if (on) { const gl = g.createRadialGradient(222, 110, 5, 222, 110, 120); gl.addColorStop(0, "rgba(100,255,150,0.3)"); gl.addColorStop(1, "rgba(100,255,150,0)"); g.fillStyle = gl; g.fillRect(0, 0, W, H); }
+    return c;
+  }
+  // 연구원: 흰 가운
+  function researcherSprite(pose) {
+    const W = 96, H = 200, c = cv(W, H), g = c.getContext("2d");
+    if (pose === "dead" || pose === "dead2") {
+      // 바닥에 쓰러진 연구원 + 핏자국
+      g.fillStyle = "rgba(120,8,8,0.9)"; g.beginPath(); g.ellipse(48, 176, pose === "dead" ? 46 : 40, 14, 0, 0, 7); g.fill();
+      for (let i = 0; i < 6; i++) { g.beginPath(); g.ellipse(10 + rng() * 76, 160 + rng() * 30, 3 + rng() * 6, 2 + rng() * 4, 0, 0, 7); g.fill(); }
+      g.save(); g.translate(48, 170); if (pose === "dead2") g.scale(-1, 1);
+      g.fillStyle = "#d9d6cf"; g.beginPath(); g.ellipse(-4, -6, 32, 11, 0.08, 0, 7); g.fill();   // 가운 몸통
+      g.fillStyle = "#2a2e38"; g.fillRect(-36, -4, 22, 8);                                      // 다리
+      g.fillStyle = "#e6d2bd"; g.beginPath(); g.arc(30, -6, 9, 0, 7); g.fill();                  // 머리
+      g.fillStyle = "#2a1e18"; g.beginPath(); g.ellipse(32, -11, 9, 5, 0, 0, 7); g.fill();
+      g.fillStyle = "#e6d2bd"; g.fillRect(8, -18, 18, 5);                                        // 팔
+      g.fillStyle = "rgba(120,8,8,0.8)"; g.fillRect(-10, -12, 22, 4); g.fillRect(14, -2, 10, 3);  // 가운 핏자국
+      g.restore(); return c;
+    }
+    const run = pose === "run";
+    g.fillStyle = "rgba(0,0,0,0.5)"; g.beginPath(); g.ellipse(48, 192, 22, 6, 0, 0, 7); g.fill();
+    g.fillStyle = "#2a2e38"; if (run) { g.fillRect(30, 125, 10, 62); g.fillRect(56, 120, 10, 66); } else { g.fillRect(37, 122, 10, 68); g.fillRect(50, 122, 10, 68); }
+    g.fillStyle = "#1b1c21"; g.fillRect(28, 184, 16, 8); g.fillRect(54, 184, 16, 8);
+    const cg = g.createLinearGradient(0, 60, 0, 140); cg.addColorStop(0, "#eeeae2"); cg.addColorStop(1, "#c9c4b8");
+    g.fillStyle = cg; g.beginPath(); g.moveTo(26, 68); g.lineTo(70, 68); g.lineTo(72, 140); g.lineTo(24, 140); g.closePath(); g.fill();
+    g.fillStyle = "#3a6ea5"; g.fillRect(43, 70, 10, 50);   // 셔츠/넥타이
+    g.fillStyle = "#d8d3c8"; g.fillRect(18, 72, 12, run ? 30 : 48); g.fillRect(66, 72, 12, run ? 26 : 44);
+    g.fillStyle = "#e6d2bd"; g.fillRect(19, run ? 100 : 118, 10, 10); g.fillRect(67, run ? 96 : 114, 10, 10);
+    g.fillStyle = "#4a7bd0"; g.fillRect(30, 100, 10, 12);   // 명찰
+    g.fillStyle = "#e6d2bd"; g.beginPath(); g.ellipse(48, 52, 13, 16, 0, 0, 7); g.fill();
+    g.fillStyle = pose === "run" ? "#5a4a3a" : "#2a1e18"; g.beginPath(); g.ellipse(48, 42, 14, 8, 0, 0, 7); g.fill();
+    g.fillStyle = "#222"; g.fillRect(43, 52, 3, 3); g.fillRect(52, 52, 3, 3);
+    if (run) { g.fillStyle = "#3a1414"; g.beginPath(); g.ellipse(48, 61, 3, 4, 0, 0, 7); g.fill(); } // 벌린 입
+    return c;
+  }
+
   function tryImage(name, cb) {
     const im = new Image(); im.onload = () => cb(im); im.onerror = () => {}; im.src = "img/" + name + ".png";
   }
@@ -141,11 +245,17 @@ window.Assets = (function () {
     makeTextures();
     spr.monster = [0, 1, 2, 3].map(monsterFrame);
     spr.mate = mateSprite(false); spr.mate_down = mateSprite(true);
+    spr.console_on = consoleSprite(true); spr.console_off = consoleSprite(false);
+    spr.generator = generatorSprite(false); spr.generator_on = generatorSprite(true);
+    spr.researcher = researcherSprite("stand"); spr.researcher_run = researcherSprite("run");
+    spr.body = researcherSprite("dead"); spr.body2 = researcherSprite("dead2");
     // 외부 이미지가 있으면 교체
-    for (const k of Object.keys(tex)) tryImage(k, im => { tex[k] = im; });
-    [0, 1, 2, 3].forEach(i => tryImage("monster_" + i, im => { spr.monster[i] = im; }));
-    tryImage("mate", im => { spr.mate = im; }); tryImage("mate_down", im => { spr.mate_down = im; });
-    tryImage("scare", im => { spr.scare = im; });
+    // img/ 에 실제로 넣은 파일만 불러온다 (새 그림을 넣으면 여기에 이름을 추가)
+    const has = n => PROVIDED.includes(n);
+    for (const k of Object.keys(tex)) if (has(k)) tryImage(k, im => { tex[k] = im; });
+    [0, 1, 2, 3].forEach(i => { if (has("monster_" + i)) tryImage("monster_" + i, im => { spr.monster[i] = im; }); });
+    for (const k of ["mate", "mate_down", "console_on", "console_off", "generator", "generator_on", "researcher", "researcher_run", "body", "body2"]) if (has(k)) tryImage(k, im => { spr[k] = im; });
+    if (has("scare")) tryImage("scare", im => { spr.scare = im; });
   }
   return { init, tex, spr, TEX };
 })();

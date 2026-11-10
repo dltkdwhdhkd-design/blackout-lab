@@ -35,8 +35,9 @@
       <label>제한 시간 <input id="set-time" type="range" min="5" max="25" step="1"> <span id="set-time-v"></span>분</label>
       <label>괴물이 깨어나기까지 <input id="set-safe" type="range" min="0" max="180" step="15"> <span id="set-safe-v"></span>초</label>
       <label>괴물 속도 <input id="set-speed" type="range" min="0.6" max="1.4" step="0.1"> <span id="set-speed-v"></span>×</label>
-      <label>탈출에 필요한 부품 <input id="set-req" type="range" min="3" max="11" step="1"> <span id="set-req-v"></span>개 / 11</label>
+      <label>탈출에 필요한 에너지 셀 <input id="set-req" type="range" min="3" max="14" step="1"> <span id="set-req-v"></span>개 / 14</label>
       <label>팀 인원 <input id="set-team" type="range" min="1" max="6" step="1"> <span id="set-team-v"></span>명</label>
+      <label>시작 연출(격리 실패) <select id="set-intro"><option value="1">켜기</option><option value="0">끄기</option></select></label>
       <label>잡혔을 때 연출 <select id="set-scare"><option value="2">전부 (얼굴 포함)</option><option value="1">암전만</option></select></label>
     </div>
     <div class="row">
@@ -66,13 +67,14 @@
     <div id="hud-top">
       <span id="hud-time">12:00</span>
       <span id="hud-fuse">부품 0/7</span>
-      <button id="btn-mute">🔊</button>
+      <span><button id="btn-map">지도</button> <button id="btn-mute">🔊</button></span>
     </div>
     <div id="hud-noise-wrap"><div id="hud-noise"></div></div>
     <div id="hud-safe"></div>
     <div id="hud-team"></div>
   </div>
   <div id="toast"></div>
+  <div id="lock-hint">화면을 클릭하면 마우스로 둘러봅니다 · 클릭/E 상호작용 · M 지도 · Esc 해제</div>
   <button id="btn-act"></button>
   <div id="modal" style="display:none">
     <div class="modal-box">

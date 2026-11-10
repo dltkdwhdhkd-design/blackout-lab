@@ -73,7 +73,7 @@
   };
   function logEvent(w, e) {
     const nm = id => (HostGame.players.get(id) || {}).name || "?";
-    const txt = ({ wake: "괴물이 깨어났다", caught: `${e.name} 잡힘`, revived: `${nm(e.id)} 회복${e.self ? "(스스로)" : ""}`, exit: "발전기 가동 — 출구 열림", escaped: `${e.name} 탈출`, end: `종료: ${e.result}`, spotted: `${nm(e.id)} 발견됨`, fuse: e.ok ? `${e.by} ${e.fuse === -1 ? "발전기" : "부품"} 성공` : `${e.by} 오답` })[e.k];
+    const txt = ({ hunt: "괴물이 기척을 쫓는 중", wake: "괴물이 움직이기 시작했다", caught: `${e.name} 잡힘`, revived: `${nm(e.id)} 회복${e.self ? "(스스로)" : ""}`, exit: "발전기 가동 — 출구 열림", escaped: `${e.name} 탈출`, end: `종료: ${e.result}`, spotted: `${nm(e.id)} 발견됨`, fuse: e.ok ? `${e.by} ${e.fuse === -1 ? "발전기 가동" : "에너지 셀 확보"}` : `${e.by} 오답 — 경보` })[e.k];
     if (txt) HostView.addLog(w.team, txt);
   }
 
@@ -110,7 +110,7 @@
   };
 
   function bindSettings() {
-    const map = { "set-time": ["timeLimit", 60], "set-safe": ["safeTime", 1], "set-speed": ["monsterSpeed", 1], "set-req": ["requiredFuses", 1], "set-team": ["teamSize", 1], "set-scare": ["scare", 1] };
+    const map = { "set-time": ["timeLimit", 60], "set-safe": ["safeTime", 1], "set-speed": ["monsterSpeed", 1], "set-req": ["requiredFuses", 1], "set-team": ["teamSize", 1], "set-scare": ["scare", 1], "set-intro": ["intro", 1] };
     for (const id in map) {
       const el = $(id); const [key, mul] = map[id];
       el.value = HostGame.settings[key] / mul;
@@ -172,7 +172,7 @@
       Client.stop();
       const res = ({ escaped: "전원 탈출 성공", partial: "일부만 탈출", lost: "아무도 나오지 못했다", timeout: "시간이 다 됐다" })[e.result];
       $("end-title").textContent = res;
-      let html = `<p class="big">탈출 ${e.escaped}/${e.total}명 · 부품 ${e.fixed}개</p>`;
+      let html = `<p class="big">탈출 ${e.escaped}/${e.total}명 · 에너지 셀 ${e.fixed}개</p>`;
       if (e.wrongs && e.wrongs.length) {
         html += `<h3>틀린 문제</h3><table><tr><th>학생</th><th>문제</th><th>고른 답</th><th>정답 · 해설</th></tr>`;
         for (const wr of e.wrongs) { const it = QUESTION_BANK[wr.unit].items[wr.qi]; html += `<tr><td>${wr.name}</td><td>${it.q}</td><td class="bad">${wr.chosen >= 0 ? it.c[wr.chosen] : "시간 초과"}</td><td><b>${it.c[it.a]}</b><br><small>${it.e}</small></td></tr>`; }

@@ -1,6 +1,8 @@
 # 그림 교체 안내 (ChatGPT 등으로 뽑아 넣기)
 
-기본 그림은 전부 코드가 즉석에서 그립니다. 더 나은 그림을 쓰고 싶으면 아래 이름으로 PNG를 `img/` 폴더에 넣기만 하면 자동으로 바뀝니다. 파일이 없으면 기본 그림을 씁니다.
+기본 그림은 전부 코드가 즉석에서 그립니다. 아래 이름으로 PNG를 만들어 보내 주면 `img/`에 넣고 `js/assets.js`의 `PROVIDED` 목록에 이름을 추가해 바꿉니다.
+
+**완료:** 괴물 4장(`monster_0`~`3`), 잡혔을 때 얼굴(`scare`) — 2026-11-11 반영.
 
 ## 괴물 (가장 효과 큼)
 - 파일: `img/monster_0.png` ~ `img/monster_3.png` (4프레임, 없는 번호는 기본 그림)
@@ -15,6 +17,12 @@
 ## 팀원
 - 파일: `img/mate.png` (서 있는 모습, 가로 1 : 세로 2, 손전등을 든 중학생, 후드 집업), `img/mate_down.png` (쓰러진 모습, 가로 1 : 세로 2, 아래쪽에 누워 있음)
 
+## 연구동 소품 (선택)
+- `img/console_on.png` / `img/console_off.png`: 실험실 단말기(셀이 꽂혀 있는 상태 / 빠진 상태). 투명 배경, 바닥에 서 있는 기계, 가로 1 : 세로 1.6.
+- `img/generator.png` / `img/generator_on.png`: 비상 발전기(정지 / 가동). 투명 배경, 가로 1.4 : 세로 1.
+- `img/researcher.png` / `img/researcher_run.png`: 흰 가운 연구원(서 있음 / 겁에 질려 도망). 투명 배경, 가로 1 : 세로 2.
+- `img/body.png` / `img/body2.png`: 바닥에 쓰러진 연구원과 핏자국(좌우 반대 두 장). 투명 배경, 가로 1 : 세로 2, 그림 아래쪽에 누워 있게.
+
 ## 벽 텍스처 (선택)
-- `img/wall.png` `img/wall2.png` `img/locker.png` `img/fuse_off.png` `img/fuse_on.png` `img/breaker.png` `img/exit_closed.png` `img/exit_open.png`
+- `img/wall.png`(실험실 흰 타일) `img/hall.png`(복도 패널) `img/contain.png`(격리실 콘크리트) `img/power.png`(설비실 금속) `img/locker.png` `img/exit_closed.png` `img/exit_open.png`, 피 묻은 버전은 이름 뒤에 `_blood`
 - 규격: 정사각형(128×128 또는 256×256), 이음새 없이 반복되는 타일. 벽 한 칸에 한 장이 세로로 1.6배 늘어나 붙습니다.
