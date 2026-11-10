@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>BLACKOUT LAB — 정전</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- 타이틀 -->
+<section id="s-title" class="screen center">
+  <div class="title-box">
+    <div class="sub">중학교 1학년 과학 · 공포 협동 탈출</div>
+    <h1 id="title-h1">BLACKOUT<br>LAB</h1>
+    <p class="warn">⚠ 어둡고 큰 소리와 갑작스러운 장면이 나옵니다. 소리를 켜고, 가능하면 이어폰을 쓰세요.</p>
+    <div class="btns">
+      <button id="btn-teacher" class="big">교사 · 방 만들기</button>
+      <button id="btn-student" class="big primary">학생 · 참가하기</button>
+      <button id="btn-solo">혼자 연습</button>
+    </div>
+    <p class="muted small">공개 중계 서버를 지나므로 실명 대신 별명을 쓰세요.</p>
+  </div>
+</section>
+
+<!-- 교사 로비 -->
+<section id="s-host-lobby" class="screen" style="display:none">
+  <div class="panel wide">
+    <div class="row between">
+      <div><div class="label">방 코드</div><div id="lobby-code" class="code">----</div><div class="muted small" id="lobby-url"></div></div>
+      <div class="right"><div class="label">접속</div><div id="lobby-count" class="code small-code">0명</div><div id="net-status" class="muted small"></div></div>
+    </div>
+    <div id="lobby-teams" class="teams"></div>
+    <div class="settings">
+      <label>제한 시간 <input id="set-time" type="range" min="5" max="25" step="1"> <span id="set-time-v"></span>분</label>
+      <label>괴물이 깨어나기까지 <input id="set-safe" type="range" min="0" max="180" step="15"> <span id="set-safe-v"></span>초</label>
+      <label>괴물 속도 <input id="set-speed" type="range" min="0.6" max="1.4" step="0.1"> <span id="set-speed-v"></span>×</label>
+      <label>탈출에 필요한 부품 <input id="set-req" type="range" min="3" max="11" step="1"> <span id="set-req-v"></span>개 / 11</label>
+      <label>팀 인원 <input id="set-team" type="range" min="1" max="6" step="1"> <span id="set-team-v"></span>명</label>
+      <label>잡혔을 때 연출 <select id="set-scare"><option value="2">전부 (얼굴 포함)</option><option value="1">암전만</option></select></label>
+    </div>
+    <div class="row">
+      <button id="btn-shuffle">팀 섞기</button>
+      <button id="btn-start" class="primary big">시작</button>
+    </div>
+  </div>
+</section>
+
+<!-- 학생 로비 -->
+<section id="s-client-lobby" class="screen center" style="display:none">
+  <div class="panel">
+    <h2>참가</h2>
+    <input id="inp-name" maxlength="8" placeholder="별명 (실명 말고)">
+    <input id="inp-code" maxlength="4" inputmode="numeric" placeholder="방 코드 4자리">
+    <button id="btn-join" class="primary big">입장</button>
+    <p id="join-msg" class="muted"></p>
+  </div>
+</section>
+
+<!-- 게임 -->
+<section id="s-game" class="screen" style="display:none">
+  <canvas id="game-canvas"></canvas>
+  <div id="touch-zone"></div>
+  <div id="stick"><div id="stick-knob"></div></div>
+  <div id="hud">
+    <div id="hud-top">
+      <span id="hud-time">12:00</span>
+      <span id="hud-fuse">부품 0/7</span>
+      <button id="btn-mute">🔊</button>
+    </div>
+    <div id="hud-noise-wrap"><div id="hud-noise"></div></div>
+    <div id="hud-safe"></div>
+    <div id="hud-team"></div>
+  </div>
+  <div id="toast"></div>
+  <button id="btn-act"></button>
+  <div id="modal" style="display:none">
+    <div class="modal-box">
+      <div id="modal-title" class="label"></div>
+      <div id="modal-q"></div>
+      <div id="modal-choices"></div>
+      <div id="modal-exp"></div>
+      <button id="modal-cancel" class="ghost">닫기</button>
+    </div>
+  </div>
+</section>
+
+<!-- 교사 관제 -->
+<section id="s-host-console" class="screen" style="display:none">
+  <div id="console-top">
+    <span>관제실 · 방 <b id="console-code"></b></span>
+    <span id="console-net" class="muted small"></span>
+    <button id="btn-host-end" class="danger">게임 종료</button>
+  </div>
+  <canvas id="host-canvas"></canvas>
+  <div id="host-log"></div>
+</section>
+
+<!-- 결과 -->
+<section id="s-end" class="screen" style="display:none">
+  <div class="panel wide results">
+    <h2 id="end-title"></h2>
+    <div id="end-body"></div>
+    <button id="btn-end-back" class="big">처음으로</button>
+  </div>
+</section>
+
+<script src="lib/mqtt.min.js"></script>
+<script src="lib/peerjs.min.js"></script>
+<script src="js/questions.js"></script>
+<script src="js/map.js"></script>
+<script src="js/net.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/client.js"></script>
+<script src="js/host.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
