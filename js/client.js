@@ -243,9 +243,7 @@ window.Client = (function () {
     if (t >= 10.2) once("shatter3", () => { Horror.shatter(); I.flash = 1; I.ambient = 0.08; Horror.siren(false); });
     if (t >= 11.5) once("lunge", () => { Horror.screech(); Horror.vibrate([500, 100, 500]); I.flash = 1.5; I.black = 1; I.text = ""; I.sub = ""; });
     if (t >= 13.5) { I.text = "…눈을 떴다."; I.sub = "중앙 홀. 조용하다. 비상등도 꺼졌다."; }
-    if (t >= 15.0) once("click", () => { Horror.click(); I.black = 0; I.text = ""; I.sub = ""; flashOn = 0; });
-    if (t >= 15.0) flashOn = Math.min(1, flashOn + dt * 1.6);
-    if (t >= 16.3) once("end", finishIntro);
+    if (t >= 15.0) once("end", () => { Horror.click(); finishIntro(); flashOn = 0; }); // 딸깍 — 내 손전등이 켜지며 바로 내 시점으로
   }
   function renderIntro(now) {
     const I = intro, t = I.t;
@@ -301,6 +299,7 @@ window.Client = (function () {
     raf = requestAnimationFrame(frame);
   }
   function update(dt, now) {
+    if (!intro && flashOn < 1) flashOn = Math.min(1, flashOn + dt * 1.4);
     if (intro) { updateIntro(dt, now); for (const o of others.values()) { o.x = o.tx; o.y = o.ty; } mon.x = mon.tx; mon.y = mon.ty; if (now - lastPos > 500) { lastPos = now; Net.sendToHost({ t: "pos", x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), a: +pos.a.toFixed(2) }); } return; }
     let fwd = input.fwd, strafe = input.strafe, turn = 0;
     if (keys["w"] || keys["arrowup"]) fwd += 1; if (keys["s"] || keys["arrowdown"]) fwd -= 1;

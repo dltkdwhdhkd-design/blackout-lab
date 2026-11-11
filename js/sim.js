@@ -1,7 +1,7 @@
 // 호스트 쪽 시뮬레이션 — 팀마다 독립된 세계(괴물·퓨즈·소음)를 돌린다
 window.Sim = (function () {
   const PLAYER_SPEED = 3.0;
-  const INTRO_LEN = 16;
+  const INTRO_LEN = 15;
   const DEFAULTS = { timeLimit: 900, safeTime: 75, monsterSpeed: 1.0, requiredFuses: 9, teamSize: 4, scare: 2, intro: 1 };
 
   function createWorld(team, settings) {

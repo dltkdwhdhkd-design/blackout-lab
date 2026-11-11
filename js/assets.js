@@ -1,7 +1,12 @@
 // 텍스처와 스프라이트 — 기본은 코드로 생성, img/ 폴더에 같은 이름의 PNG가 있으면 그걸 우선 사용
 // 교체 가능한 파일 목록은 docs/art-requests.md 참고
 window.Assets = (function () {
-  const PROVIDED = ["monster_0", "monster_1", "monster_2", "monster_3", "scare"];
+  const PROVIDED = ["monster_0", "monster_1", "monster_2", "monster_3", "scare",
+    "body", "body2", "console_off", "console_on", "generator", "generator_on", "mate", "mate_down", "researcher", "researcher_run",
+    "wall", "wall_blood", "hall", "hall_blood", "contain", "contain_blood", "power", "power_blood",
+    "locker", "locker_blood", "exit_closed", "exit_closed_blood", "exit_open", "exit_open_blood"];
+  const TEX_NAMES = ["wall", "wall_blood", "hall", "hall_blood", "contain", "contain_blood", "power", "power_blood",
+    "locker", "locker_blood", "exit_closed", "exit_closed_blood", "exit_open", "exit_open_blood"];
   const TEX = 64;
   const tex = {}, spr = {};
   let rng = mulberry(7);
@@ -252,7 +257,7 @@ window.Assets = (function () {
     // 외부 이미지가 있으면 교체
     // img/ 에 실제로 넣은 파일만 불러온다 (새 그림을 넣으면 여기에 이름을 추가)
     const has = n => PROVIDED.includes(n);
-    for (const k of Object.keys(tex)) if (has(k)) tryImage(k, im => { tex[k] = im; });
+    for (const k of TEX_NAMES) if (has(k)) tryImage(k, im => { tex[k] = im; if (k === "wall") tex.wall2 = im; });
     [0, 1, 2, 3].forEach(i => { if (has("monster_" + i)) tryImage("monster_" + i, im => { spr.monster[i] = im; }); });
     for (const k of ["mate", "mate_down", "console_on", "console_off", "generator", "generator_on", "researcher", "researcher_run", "body", "body2"]) if (has(k)) tryImage(k, im => { spr[k] = im; });
     if (has("scare")) tryImage("scare", im => { spr.scare = im; });

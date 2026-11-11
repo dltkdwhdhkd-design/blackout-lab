@@ -15,11 +15,11 @@ window.Fps = (function () {
   function texFor(tx, ty, hx, hy, rdx, rdy, st) {
     const t = MapUtil.tile(tx, ty);
     const T = Assets.tex;
-    if (t === "L") return T.locker;
-    if (t === "E") return st.exitOpen ? T.exit_open : T.exit_closed;
+    if (t === "L") return (st.gore && T.locker_blood && (tx * 13 + ty * 7) % 5 === 0) ? T.locker_blood : T.locker;
+    if (t === "E") { const k = st.exitOpen ? "exit_open" : "exit_closed"; return (st.gore && T[k + "_blood"]) || T[k]; }
     const room = MapUtil.roomAt(hx - rdx * 0.03, hy - rdy * 0.03);
     let key = room ? (TEX_BY_ROOM[room.tex] || "wall") : "wall";
-    if (st.gore && key !== "power" && T[key + "_blood"] && ((tx * 31 + ty * 17) % 23 === 0 || (room && room.id === "contain1" && (tx * 7 + ty) % 4 === 0))) key += "_blood";
+    if (st.gore && T[key + "_blood"] && ((tx * 31 + ty * 17) % 23 === 0 || (room && room.id === "contain1" && (tx * 7 + ty) % 4 === 0))) key += "_blood";
     return T[key] || T.wall;
   }
   function isWall(tx, ty) { const t = MapUtil.tile(tx, ty); return t === "#" || t === "L" || t === "E"; }
@@ -99,7 +99,8 @@ window.Fps = (function () {
       if (trY <= 0.15) continue;
       const scrX = (RW / 2) * (1 + trX / trY);
       let img, scale, yoff = 0;
-      const SC = { mate: 1.5, mate_down: 0.9, console_on: 1.35, console_off: 1.35, generator: 1.5, generator_on: 1.5, body: 0.9, body2: 0.9, researcher: 1.5, researcher_run: 1.5 };
+      // 크기(벽 높이 1.6 기준). 쓰러진 인물 그림은 아래 40%에만 있어서 크게 잡는다
+      const SC = { mate: 1.4, mate_down: 2.2, console_on: 1.35, console_off: 1.35, generator: 1.45, generator_on: 1.45, body: 2.2, body2: 2.2, researcher: 1.4, researcher_run: 1.4 };
       if (s.kind === "monster") {
         let f;
         if (s.frame !== undefined) f = s.frame;
