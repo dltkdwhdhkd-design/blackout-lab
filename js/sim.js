@@ -182,9 +182,18 @@ window.Sim = (function () {
           if (p.light && d < 10) { const spot = lockerFront(mo, p.hid); if (spot && d < ld) { ld = d; lit = { p, x: spot.x, y: spot.y, locker: true }; } }
           continue;
         }
-        // 직접 보기: 손전등을 켠 사람은 멀리서도, 끈 사람은 아주 가까이서만 보인다
-        const range = p.light ? 12 : 3.2;
-        if (d < range && d < bd && MapUtil.los(mo.x, mo.y, p.x, p.y)) { bd = d; best = p; continue; }
+        // 직접 보기: 손전등을 켠 사람은 멀리서도 보인다.
+        // 끈 사람은 괴물이 그쪽을 보고 있으면 6칸, 등지고 있으면 2.5칸 안에서 보인다.
+        const seeLine = d < 12 && MapUtil.los(mo.x, mo.y, p.x, p.y);
+        let da = Math.abs(Math.atan2(p.y - mo.y, p.x - mo.x) - mo.a) % (Math.PI * 2); if (da > Math.PI) da = Math.PI * 2 - da;
+        const facing = da < 0.9;
+        const range = p.light ? 12 : (facing ? 6 : 2.5);
+        if (seeLine && d < range && d < bd) { bd = d; best = p; p.sus = 0; continue; }
+        // 어둠 속에서 시야 안에 오래 있으면 의심이 쌓여 결국 들킨다 (가까울수록, 정면일수록 빠르게)
+        if (seeLine && !p.light && d < 9) {
+          p.sus = (p.sus || 0) + 0.25 * (facing ? 1 : 0.45) * (1.6 - d / 9);
+          if (p.sus >= 1 && d < bd) { bd = d; best = p; p.sus = 0; continue; }
+        } else p.sus = Math.max(0, (p.sus || 0) - 0.06);
         // 손전등 빛이 벽에 비친 자리를 보면 그쪽으로 온다 (모퉁이 너머에서도)
         if (p.light && d < 16 && d < ld) {
           const spot = beamSpot(p);
@@ -225,11 +234,14 @@ window.Sim = (function () {
       if (d < 0.75) { catchPlayer(w, t); return; }
       mo.repath -= dt;
       if (mo.repath <= 0 || !mo.path.length) { mo.path = MapUtil.bfs(mo.x, mo.y, t.x, t.y) || []; mo.repath = 0.4; }
+      let moved = false;
       if (d < 1.6 && MapUtil.los(mo.x, mo.y, t.x, t.y)) {
-        // 바로 앞이면 직진
+        // 바로 앞이면 직진 — 모서리에 걸려 못 나아가면 길찾기로
         const dx = t.x - mo.x, dy = t.y - mo.y; const st = CHASE * dt;
-        const nxt = MapUtil.move(mo.x, mo.y, dx / d * st, dy / d * st, 0.3, false); mo.x = nxt.x; mo.y = nxt.y; mo.a = Math.atan2(dy, dx); mo.speed = CHASE;
-      } else followPath(mo, CHASE, dt);
+        const nxt = MapUtil.move(mo.x, mo.y, dx / d * st, dy / d * st, 0.3, false);
+        if (Math.hypot(nxt.x - mo.x, nxt.y - mo.y) > st * 0.4) { mo.x = nxt.x; mo.y = nxt.y; mo.a = Math.atan2(dy, dx); mo.speed = CHASE; moved = true; }
+      }
+      if (!moved) { if (!mo.path.length) mo.path = MapUtil.bfs(mo.x, mo.y, t.x, t.y) || []; followPath(mo, CHASE, dt); }
       return;
     }
     if (mo.state === "hunt") {
