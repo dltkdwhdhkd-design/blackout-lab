@@ -59,6 +59,7 @@ window.HostView = (function () {
       ctx.fillStyle = p.down ? "#ff6060" : ["#7ec8ff", "#ffd27e", "#9dff8a", "#ff9ad5", "#c9a6ff", "#ffb48a"][i % 6];
       ctx.beginPath(); ctx.arc(ox + p.x * T, oy + p.y * T, T * 0.45, 0, 7); ctx.fill();
       if (p.hid) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke(); }
+      if (p.light && !p.down) { ctx.strokeStyle = "rgba(255,230,140,0.8)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(ox + p.x * T, oy + p.y * T); ctx.lineTo(ox + (p.x + Math.cos(p.a) * 3) * T, oy + (p.y + Math.sin(p.a) * 3) * T); ctx.stroke(); }
       ctx.fillStyle = "#fff"; ctx.font = `${Math.max(8, T * 0.9)}px sans-serif`; ctx.fillText(p.name, ox + p.x * T, oy + p.y * T - T * 0.7);
       i++;
     }

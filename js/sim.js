@@ -23,7 +23,7 @@ window.Sim = (function () {
   function addPlayer(w, id, name) {
     const spawns = MapUtil.find("S");
     const s = spawns[w.players.size % spawns.length];
-    w.players.set(id, { id, name, x: s.x + 0.5, y: s.y + 0.5, a: 0, down: false, downT: 0, hid: null, hidT: 0, seenHide: false, escaped: false, rev: 0, revT: 0, lastPos: 0, caught: 0 });
+    w.players.set(id, { id, name, x: s.x + 0.5, y: s.y + 0.5, a: 0, down: false, downT: 0, hid: null, hidT: 0, seenHide: false, escaped: false, rev: 0, revT: 0, lastPos: -9, caught: 0, light: true });
   }
 
   function pickQuestion(w, unit) {
@@ -46,11 +46,14 @@ window.Sim = (function () {
     switch (m.t) {
       case "pos":
         if (p.down || p.escaped) break;
-        p.x = m.x; p.y = m.y; p.a = m.a; p.lastPos = w.elapsed;
+        if (Math.hypot(m.x - p.x, m.y - p.y) > 0.02) p.lastPos = w.elapsed; // 실제로 움직였을 때만 '발소리'
+        p.x = m.x; p.y = m.y; p.a = m.a;
+        if (m.l !== undefined) p.light = !!m.l;
         break;
       case "hide": {
         if (p.down || p.escaped) break;
         p.hid = { x: m.x, y: m.y }; p.hidT = w.elapsed;
+        if (m.l !== undefined) p.light = !!m.l;
         const mo = w.monster;
         const d = Math.hypot(mo.x - p.x, mo.y - p.y);
         p.seenHide = mo.state !== "sleep" && d < 7 && MapUtil.los(mo.x, mo.y, p.x, p.y);
@@ -169,17 +172,35 @@ window.Sim = (function () {
     mo.perc += dt;
     if (mo.perc >= 0.25) {
       mo.perc = 0;
-      let best = null, bd = 8.5;
+      let best = null, bd = 99, lit = null, ld = 99;
       for (const p of w.players.values()) {
         if (p.down || p.escaped) continue;
+        const d = Math.hypot(p.x - mo.x, p.y - mo.y);
         if (p.hid) {
-          const d = Math.hypot(p.x - mo.x, p.y - mo.y);
           if (p.seenHide && d < 1.3) { catchPlayer(w, p); return; }
+          // 사물함 안에서 손전등을 켜 두면 틈으로 빛이 샌다
+          if (p.light && d < 10) { const spot = lockerFront(mo, p.hid); if (spot && d < ld) { ld = d; lit = { p, x: spot.x, y: spot.y, locker: true }; } }
           continue;
         }
-        const d = Math.hypot(p.x - mo.x, p.y - mo.y);
-        if (d < bd && MapUtil.los(mo.x, mo.y, p.x, p.y)) { bd = d; best = p; }
+        // 직접 보기: 손전등을 켠 사람은 멀리서도, 끈 사람은 아주 가까이서만 보인다
+        const range = p.light ? 12 : 3.2;
+        if (d < range && d < bd && MapUtil.los(mo.x, mo.y, p.x, p.y)) { bd = d; best = p; continue; }
+        // 손전등 빛이 벽에 비친 자리를 보면 그쪽으로 온다 (모퉁이 너머에서도)
+        if (p.light && d < 16 && d < ld) {
+          const spot = beamSpot(p);
+          if (Math.hypot(spot.x - mo.x, spot.y - mo.y) < 13 && MapUtil.los(mo.x, mo.y, spot.x, spot.y)) { ld = d; lit = { p, x: p.x, y: p.y }; }
+        }
       }
+      if (!best && lit && mo.state !== "chase") {
+        if (lit.locker) lit.p.seenHide = true;
+        const fresh = mo.state !== "hunt" || mo.lightId !== lit.p.id;
+        mo.repath -= 0.25;
+        if (fresh || mo.repath <= 0) {
+          mo.state = "hunt"; mo.target = { x: lit.x, y: lit.y }; mo.path = MapUtil.bfs(mo.x, mo.y, lit.x, lit.y) || mo.path; mo.repath = 1.0; mo.lightId = lit.p.id;
+          if (fresh) emit(w, { k: "light", id: lit.p.id, locker: !!lit.locker });
+        }
+      }
+      if (mo.state !== "hunt") mo.lightId = null;
       if (!best && mo.state === "roam") {
         for (const p of w.players.values()) {
           if (p.down || p.escaped || p.hid) continue;
@@ -235,6 +256,27 @@ window.Sim = (function () {
     followPath(mo, ROAM, dt);
   }
 
+  // 손전등 빛이 닿는 곳(앞쪽 벽까지 최대 7칸)
+  function beamSpot(p) {
+    const cx = Math.cos(p.a), cy = Math.sin(p.a);
+    let x = p.x, y = p.y;
+    for (let t = 0.3; t < 7; t += 0.25) {
+      const nx = p.x + cx * t, ny = p.y + cy * t;
+      if (MapUtil.opaque(Math.floor(nx), Math.floor(ny))) break;
+      x = nx; y = ny;
+    }
+    return { x, y };
+  }
+  // 괴물이 볼 수 있는 사물함 앞 칸
+  function lockerFront(mo, hid) {
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = hid.x + dx, ny = hid.y + dy;
+      if (MapUtil.solid(nx, ny)) continue;
+      if (MapUtil.los(mo.x, mo.y, nx + 0.5, ny + 0.5)) return { x: nx + 0.5, y: ny + 0.5 };
+    }
+    return null;
+  }
+
   function catchPlayer(w, p) {
     p.down = true; p.downT = w.elapsed; p.hid = null; p.caught++;
     const mo = w.monster; mo.state = "feed"; mo.timer = 3.5; mo.targetId = null;
@@ -285,7 +327,7 @@ window.Sim = (function () {
     return {
       t: "st", team: w.team,
       m: [+mo.x.toFixed(2), +mo.y.toFixed(2), mo.state, +mo.a.toFixed(2), +mo.speed.toFixed(1)],
-      p: [...w.players.values()].map(p => [p.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.a.toFixed(2), p.down ? 1 : 0, p.hid ? 1 : 0, p.escaped ? 1 : 0, p.down ? +p.rev.toFixed(1) : 0]),
+      p: [...w.players.values()].map(p => [p.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.a.toFixed(2), p.down ? 1 : 0, p.hid ? 1 : 0, p.escaped ? 1 : 0, p.down ? +p.rev.toFixed(1) : 0, p.light ? 1 : 0]),
       f: mask, b: w.breaker.stage, e: w.exitOpen ? 1 : 0, n: Math.round(w.noise), tm: Math.max(0, Math.round(w.time)), ph: w.phase,
       req: w.settings.requiredFuses, safe: Math.max(0, Math.round(w.settings.safeTime - w.elapsed)), it: +Math.max(0, w.introT).toFixed(1),
     };

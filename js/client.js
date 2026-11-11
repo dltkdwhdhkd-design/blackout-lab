@@ -17,6 +17,7 @@ window.Client = (function () {
   let fuses = MapUtil.fuses(), breakerPos = MapUtil.find("B")[0];
   let onEnd = null, grain = null, wrongFlashT = 0, bobT = 0;
   let intro = null, gore = false, flashOn = 1, locked = false, look = 0, mapOpen = false, mapImg = null;
+  let lightOn = true, lightTipShown = false, hideTipShown = false;
   const isTouch = ("ontouchstart" in window) && window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const colors = ["#7ec8ff", "#ffd27e", "#9dff8a", "#ff9ad5", "#c9a6ff", "#ffb48a"];
   const el = id => document.getElementById(id);
@@ -29,7 +30,7 @@ window.Client = (function () {
     const sp = MapUtil.find("S")[opts.spawnIndex % 6 || 0];
     pos = { x: sp.x + 0.5, y: sp.y + 0.5, a: 0 };
     down = false; hidden = null; escaped = false; phase = "play"; modal = null; others.clear();
-    setupInput(); makeGrain(); mapImg = null; mapOpen = false; look = 0;
+    setupInput(); makeGrain(); mapImg = null; mapOpen = false; look = 0; lightOn = true; el("btn-light").classList.add("on");
     running = true; last = performance.now();
     raf = requestAnimationFrame(frame);
     Horror.init(); Horror.resume();
@@ -51,6 +52,7 @@ window.Client = (function () {
       const k = e.key.toLowerCase(); keys[k] = true;
       if (k === " " || k === "e") { e.preventDefault(); interactPress(); }
       if ((k === "m" || k === "tab") && !e.repeat) { e.preventDefault(); if (!intro && !modal) mapOpen = !mapOpen; }
+      if (k === "f" && !e.repeat) toggleLight();
       if (e.key === "Escape") { if (modal) cancelModal(); mapOpen = false; }
     };
     window.onkeyup = e => { keys[e.key.toLowerCase()] = false; if (e.key === " " || e.key.toLowerCase() === "e") interactRelease(); };
@@ -82,7 +84,10 @@ window.Client = (function () {
         return;
       }
       if (e.button === 0) interactPress();
+      else if (e.button === 2) toggleLight();
     });
+    zone.addEventListener("contextmenu", e => e.preventDefault());
+    el("btn-light").onpointerdown = e => { e.preventDefault(); e.stopPropagation(); toggleLight(); };
     zone.addEventListener("pointerup", e => { if (e.pointerType === "mouse" && locked) interactRelease(); });
     document.addEventListener("pointerlockchange", () => { locked = document.pointerLockElement === zone; });
     document.addEventListener("mousemove", e => {
@@ -111,11 +116,21 @@ window.Client = (function () {
     const n = nearest(); if (!n) return;
     if (n.kind === "fuse") Net.sendToHost({ t: "q", fuse: n.fuse.id });
     else if (n.kind === "breaker") Net.sendToHost({ t: "q", fuse: -1 });
-    else if (n.kind === "hide") { hidePrev = { x: pos.x, y: pos.y, a: pos.a }; hidden = { x: n.x, y: n.y }; Net.sendToHost({ t: "hide", x: n.x, y: n.y }); Horror.breath(); showToast("사물함 안. 숨을 죽여라.", 2); }
+    else if (n.kind === "hide") {
+      hidePrev = { x: pos.x, y: pos.y, a: pos.a }; hidden = { x: n.x, y: n.y }; Net.sendToHost({ t: "hide", x: n.x, y: n.y, l: lightOn ? 1 : 0 }); Horror.breath();
+      showToast(lightOn ? "사물함 안. 손전등이 켜져 있다 — 틈으로 빛이 샌다. (F로 끄기)" : "사물함 안. 숨을 죽여라.", 3);
+    }
     else if (n.kind === "unhide") { hidden = null; if (hidePrev) { pos.x = hidePrev.x; pos.y = hidePrev.y; pos.a = hidePrev.a; } Net.sendToHost({ t: "unhide" }); }
     else if (n.kind === "rev") holdRev = n.id;
   }
   function interactRelease() { holdRev = false; }
+  function toggleLight() {
+    if (!running || intro || down || escaped || phase !== "play") return;
+    lightOn = !lightOn; Horror.click();
+    lastPos = 0; // 바로 알림
+    if (!lightOn && !lightTipShown) { lightTipShown = true; showToast("손전등을 껐다. 그것도 나를 잘 못 본다. 바로 앞까지 오지 않는 한.", 3.5); }
+    else if (lightOn && hidden) showToast("사물함 안에서 켜면 틈으로 빛이 샌다.", 2.5);
+  }
 
   // ---------- 수신 ----------
   function onMessage(d) {
@@ -128,11 +143,11 @@ window.Client = (function () {
       phase = d.ph;
       const seen = new Set();
       for (const p of d.p) {
-        const [id, x, y, a, dn, hid, esc, rev] = p;
+        const [id, x, y, a, dn, hid, esc, rev, lt] = p;
         if (id === me) { down = !!dn; escaped = !!esc; revProgress = rev; continue; }
         seen.add(id);
         let o = others.get(id); if (!o) { o = { x, y, a }; others.set(id, o); }
-        o.tx = x; o.ty = y; o.a = a; o.down = !!dn; o.hid = !!hid; o.esc = !!esc; o.rev = rev; o.name = names[id] || "";
+        o.tx = x; o.ty = y; o.a = a; o.down = !!dn; o.hid = !!hid; o.esc = !!esc; o.rev = rev; o.name = names[id] || ""; o.light = lt !== 0;
       }
       for (const id of [...others.keys()]) if (!seen.has(id)) others.delete(id);
     } else if (d.t === "ev") { if (d.team !== team) return; handleEvent(d); }
@@ -148,6 +163,12 @@ window.Client = (function () {
       case "cool": if (e.id === me) showToast(`잠겨 있다. ${e.left}초 뒤 다시.`, 2); break;
       case "wake": Horror.bang(); fx.shake = 1; showToast("…건물 어딘가에서 무언가가 깨어났다.", 4); Horror.vibrate([80, 60, 200]); break;
       case "hunt": Horror.scrape(); break;
+      case "light":
+        if (e.id === me) {
+          Horror.scrape(); Horror.vibrate([60, 40, 120]); fx.spotted = 0.5;
+          showToast(e.locker ? "…새어 나간 빛을 봤다. 무언가 사물함 쪽으로 온다." : "…빛을 봤다. 무언가 이쪽으로 온다. 손전등을 꺼라.", 3);
+        }
+        break;
       case "spotted": if (e.id === me) { fx.spotted = 1; Horror.scrape(); Horror.vibrate([60, 40, 60, 40, 200]); showToast("들켰다. 뛰어.", 2); } break;
       case "caught": if (e.id === me) jumpScare(); else { Horror.bang(); showToast(`${e.name}이(가) 쓰러졌다. 찾아가서 구해야 한다.`, 4); fx.shake = 0.6; } break;
       case "revived": if (e.id === me) { down = false; fx.fade = 1; showToast(e.self ? "정신이 돌아왔다." : "팀원이 깨워 줬다.", 3); } else showToast(`${names[e.id] || "팀원"}이(가) 일어났다.`, 2); break;
@@ -198,11 +219,11 @@ window.Client = (function () {
   const lerpP = (A, B, t) => ({ x: lerp(A.x, B.x, t), y: lerp(A.y, B.y, t) });
   function beginIntro() {
     intro = { t0: performance.now(), t: 0, ambient: 0.9, done: {}, text: "", sub: "", flash: 0, red: 0, shake: 0, black: 0 };
-    el("hud").style.visibility = "hidden"; el("btn-act").style.visibility = "hidden"; el("stick").style.display = "none";
+    el("hud").style.visibility = "hidden"; el("btn-act").style.visibility = "hidden"; el("btn-light").style.visibility = "hidden"; el("stick").style.display = "none";
   }
   function finishIntro() {
     intro = null; flashOn = 1; gore = true; Horror.siren(false);
-    el("hud").style.visibility = ""; el("btn-act").style.visibility = "";
+    el("hud").style.visibility = ""; el("btn-act").style.visibility = ""; el("btn-light").style.visibility = "";
     showToast(`발전기를 돌려야 보안문이 열린다. 실험실 단말기에서 에너지 셀 ${settings.requiredFuses}개를 회수하라. …그것은 아직 이 건물 안에 있다.`, 7);
   }
   function once(key, fn) { if (!intro.done[key]) { intro.done[key] = true; fn(); } }
@@ -301,7 +322,7 @@ window.Client = (function () {
     if (hidden) { pos.x = hidden.x + 0.5; pos.y = hidden.y + 0.5; }
     for (const o of others.values()) { o.x += (o.tx - o.x) * Math.min(1, dt * 10); o.y += (o.ty - o.y) * Math.min(1, dt * 10); }
     mon.x += (mon.tx - mon.x) * Math.min(1, dt * 8); mon.y += (mon.ty - mon.y) * Math.min(1, dt * 8);
-    if (now - lastPos > 100 && !down && !escaped) { lastPos = now; Net.sendToHost({ t: "pos", x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), a: +pos.a.toFixed(2) }); }
+    if (now - lastPos > 100 && !down && !escaped) { lastPos = now; Net.sendToHost({ t: "pos", x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), a: +pos.a.toFixed(2), l: lightOn ? 1 : 0 }); }
     if (holdRev && now - lastRev > 100) { lastRev = now; Net.sendToHost({ t: "rev", target: holdRev }); }
     if (holdRev) { const o = others.get(holdRev); if (!o || !o.down || Math.hypot(o.x - pos.x, o.y - pos.y) > 1.7) holdRev = false; }
     if (modal && !modal.answered && now - modal.t0 > 20000) answer(-1);
@@ -331,6 +352,7 @@ window.Client = (function () {
       el("hud-safe").textContent = S.safe > 0 ? `아직 조용하다 … ${S.safe}` : "";
       el("hud-team").innerHTML = S.p.map((p, i) => `<span class="${p[4] ? 'dn' : ''} ${p[6] ? 'esc' : ''}" style="color:${colors[i % colors.length]}">${p[6] ? "✓" : p[4] ? "✕" : "●"} ${names[p[0]] || "?"}</span>`).join(" ");
     }
+    el("btn-light").classList.toggle("on", lightOn);
     el("lock-hint").style.display = (!isTouch && !locked && !modal && !mapOpen && !escaped && !intro && !down && phase === "play") ? "block" : "none";
     el("toast").style.visibility = mapOpen ? "hidden" : "";
     el("toast").textContent = toast.t > 0 ? toast.text : "";
@@ -349,7 +371,8 @@ window.Client = (function () {
     ctx.save(); ctx.translate((Math.random() - 0.5) * sh, (Math.random() - 0.5) * sh);
     const view = hidden ? { x: hidden.x + 0.5, y: hidden.y + 0.5, a: hidePrev ? hidePrev.a + Math.PI : pos.a } : pos;
     Fps.render(ctx, W, H, {
-      pos: view, fuses, fmask: S ? S.f : 0, exitOpen: !!(S && S.e), flicker: (hidden ? 0.25 : (down ? 0.3 : fx.flicker)) * flashOn,
+      pos: view, fuses, fmask: S ? S.f : 0, exitOpen: !!(S && S.e), flicker: (lightOn || down ? (hidden ? 0.25 : (down ? 0.3 : fx.flicker)) : 0) * flashOn,
+      glow: lightOn || down ? 0 : 0.16,
       monster: mon, others: [...others.values()], now, downed: down, moving, pitch: Math.sin(bobT) * (moving ? 4 : 0), gore,
       look: hidden ? 0 : look,
     });
@@ -439,7 +462,7 @@ window.Client = (function () {
   }
   function drawJumpScare(c, now) {
     const t = (now - fx.jumpT0) / 1000;
-    for (const id of ["hud", "toast", "btn-act"]) el(id).style.visibility = t < 1.5 ? "hidden" : "";
+    for (const id of ["hud", "toast", "btn-act", "btn-light"]) el(id).style.visibility = t < 1.5 ? "hidden" : "";
     if (settings && settings.scare < 2) { c.fillStyle = `rgba(0,0,0,${Math.min(1, t * 3)})`; c.fillRect(0, 0, W, H); return; }
     if (t < 0.07) { c.fillStyle = "#fff"; c.fillRect(0, 0, W, H); return; }
     c.fillStyle = "#000"; c.fillRect(0, 0, W, H);

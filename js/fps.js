@@ -42,7 +42,7 @@ window.Fps = (function () {
     const amb = st.ambient || 0;
     g.fillStyle = amb ? `rgb(${60 * amb | 0},${62 * amb | 0},${60 * amb | 0})` : "#050506"; g.fillRect(0, 0, RW, RH);
     const fg = g.createLinearGradient(0, horizon, 0, RH);
-    const fl = Math.max(flick * 0.6, amb);
+    const fl = Math.max(flick * 0.6, amb, (st.glow || 0) * 0.5);
     fg.addColorStop(0, amb ? `rgb(${50 * amb | 0},${50 * amb | 0},${48 * amb | 0})` : "#0a0a0a"); fg.addColorStop(0.35, `rgb(${70 * fl | 0},${68 * fl | 0},${62 * fl | 0})`); fg.addColorStop(1, `rgb(${110 * fl | 0},${104 * fl | 0},${94 * fl | 0})`);
     g.fillStyle = fg; g.fillRect(0, horizon, RW, RH - horizon);
     // 바닥 손전등 웅덩이
@@ -77,14 +77,14 @@ window.Fps = (function () {
       let texX = Math.floor(wallX * tw);
       if ((side === 0 && rdx > 0) || (side === 1 && rdy < 0)) texX = tw - texX - 1;
       g.drawImage(tx, texX, 0, 1, th, x, top, 1, lineH);
-      let b = brightness(camX, perp, flick, st.ambient) * (side ? 0.72 : 1);
+      let b = brightness(camX, perp, flick, st.ambient, st.glow) * (side ? 0.72 : 1);
       g.fillStyle = `rgba(0,0,0,${1 - b})`; g.fillRect(x, top, 1, lineH);
     }
 
     // 스프라이트
     const sprites = [];
     if (st.monster && st.monster.state !== "sleep") sprites.push({ kind: "monster", x: st.monster.x, y: st.monster.y });
-    for (const o of st.others) if (!o.esc && !o.hid) sprites.push({ kind: o.down ? "mate_down" : "mate", x: o.x, y: o.y, name: o.name, rev: o.rev });
+    for (const o of st.others) if (!o.esc && !o.hid) sprites.push({ kind: o.down ? "mate_down" : "mate", x: o.x, y: o.y, name: o.name, rev: o.rev, light: o.light });
     for (const f of st.fuses) sprites.push({ kind: ((st.fmask >> f.id) & 1) ? "console_off" : "console_on", x: f.x + 0.5, y: f.y + 0.5 });
     const bp = MapUtil.find("B")[0]; sprites.push({ kind: st.exitOpen ? "generator_on" : "generator", x: bp.x + 0.5, y: bp.y + 0.5 });
     if (st.gore) for (const bd of BODIES) sprites.push({ kind: bd.k, x: bd.x, y: bd.y });
@@ -116,7 +116,8 @@ window.Fps = (function () {
       const top = bottom - sh + yoff;
       const x0 = Math.floor(scrX - sw / 2), x1 = Math.ceil(scrX + sw / 2);
       const camX = trX / trY;
-      let b = brightness(camX, trY, flick, st.ambient);
+      let b = brightness(camX, trY, flick, st.ambient, st.glow);
+      if (s.kind === "mate" && s.light) b = Math.max(b, 0.55 / (1 + trY * 0.12)); // 팀원 손전등은 멀리서도 보인다
       if (s.kind === "console_on" || s.kind === "generator_on") b = Math.max(b, 0.35 / (1 + trY * 0.15)); // 화면 빛이 스스로 난다
       if (b < 0.03 && s.kind !== "monster") continue;
       // 보이는 부분만 임시 캔버스에 그린 뒤 그 픽셀만 어둡게 해서 붙인다 (배경까지 칠하지 않도록)
@@ -162,10 +163,11 @@ window.Fps = (function () {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(buf, 0, 0, W, H);
   }
-  function brightness(camX, dist, flick, ambient) {
+  function brightness(camX, dist, flick, ambient, glow) {
     const cone = Math.max(0.05, 1 - camX * camX * 0.85);
     const fog = Math.min(1, 1.7 / (0.5 + dist * 0.5));
     let b = cone * fog * flick;
+    if (glow) b = Math.max(b, glow / (1 + dist * dist * 0.55)); // 손전등을 끄면 바로 앞만 겨우 보인다
     if (ambient) b = Math.max(b, ambient * Math.min(1, 4 / (1 + dist * 0.35)));
     return Math.max(0, Math.min(1, b));
   }

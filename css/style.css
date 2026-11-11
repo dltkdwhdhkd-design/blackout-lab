@@ -52,6 +52,8 @@ input, select { font: inherit; background: #0d0e11; color: #eee; border: 1px sol
 #hud-team .dn { opacity: 0.5; text-decoration: line-through; } #hud-team .esc { opacity: 0.6; }
 #toast { position: absolute; left: 50%; top: 28%; transform: translateX(-50%); width: 88%; text-align: center; color: #e8e2d6; font-size: 1.05rem; text-shadow: 0 0 10px #000, 0 0 2px #000; pointer-events: none; transition: opacity 0.4s; }
 #btn-act { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: max(28px, env(safe-area-inset-bottom)); width: 112px; height: 112px; border-radius: 50%; background: rgba(40,40,48,0.5); border: 2px solid rgba(255,255,255,0.15); color: #fff; font-size: 1rem; font-weight: 700; opacity: 0.35; touch-action: none; user-select: none; }
+#btn-light { position: absolute; right: max(32px, calc(env(safe-area-inset-right) + 14px)); bottom: max(152px, calc(env(safe-area-inset-bottom) + 124px)); width: 76px; height: 76px; border-radius: 50%; font-size: 1.7rem; padding: 0; background: rgba(20,20,24,0.7); border: 2px solid rgba(255,255,255,0.15); opacity: 0.55; touch-action: none; user-select: none; }
+#btn-light.on { opacity: 1; border-color: #ffd98a; box-shadow: 0 0 18px rgba(255,220,130,0.45); }
 #btn-act.on { opacity: 1; background: rgba(120,20,20,0.75); border-color: #ff4a4a; box-shadow: 0 0 24px rgba(255,40,40,0.4); }
 #modal { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); padding: 16px; }
 .modal-box { width: min(100%, 520px); background: #0b0c0f; border: 1px solid #5a1414; border-radius: 10px; padding: 18px; box-shadow: 0 0 40px rgba(255,0,0,0.15); }
