@@ -73,6 +73,10 @@ body.pc #btn-act:not(.on) { display: none; }
 #modal-exp { margin: 12px 0 6px; color: #c8bfae; font-size: 0.95rem; min-height: 1.2em; }
 
 /* 설정 */
+#reconnect { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.86); padding: 12px; }
+#reconnect .panel { margin: 0; max-height: 90vh; overflow: auto; }
+#reconnect h2 { color: #ffd27e; }
+#reconnect p { line-height: 1.5; }
 #options { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); padding: 12px; }
 .opt-box { width: min(94vw, 480px); max-height: 92vh; overflow: auto; margin: 0; }
 .opt-box h2 { margin: 0 0 4px; }

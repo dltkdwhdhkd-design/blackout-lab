@@ -8,18 +8,30 @@
   const HostGame = {
     players: new Map(), worlds: [], settings: { ...Sim.DEFAULTS }, started: false, timer: null, acc: 0, lastTick: 0, snapAcc: 0,
     onMsg(d, from) {
+      if (!d || typeof d !== "object") return;
       if (d.t === "join") {
+        if (d.roomId && d.roomId !== Net.id) {
+          Net.sendToClients({ t: "join-error", to: from, requestId: d.requestId, reason: "이전 방이 종료되었습니다. 현재 방 코드를 확인하고 새로 입장하세요." }); return;
+        }
         if (!this.players.has(from)) {
+          if (this.started && this.worlds.every(w => w.phase === "end")) {
+            Net.sendToClients({ t: "join-error", to: from, requestId: d.requestId, reason: "이미 끝난 게임입니다. 선생님이 새 방을 만들면 입장하세요." }); return;
+          }
           this.players.set(from, { id: from, name: String(d.name || "?").slice(0, 8), team: -1 });
           if (this.started) {
             // 늦게 들어온 학생: 가장 적은 팀에
             let best = 0; this.worlds.forEach((w, i) => { if (w.players.size < this.worlds[best].players.size) best = i; });
             if (!this.worlds.length) { this.worlds.push(Sim.createWorld(0, this.settings)); HostView.init(this.worlds, this.names()); }
             const p = this.players.get(from); p.team = best; Sim.addPlayer(this.worlds[best], from, p.name);
-            this.sendGo();
+            Net.sendToClients({ t: "roster", players: this.lobbyMsg().players });
           } else this.assignTeams();
         }
-        if (!this.started) this.broadcastLobby(); else this.sendGo();
+        if (!this.started) this.broadcastLobby();
+        else {
+          const p = this.players.get(from), w = this.worlds[p.team];
+          if (d.requestId && p.resumeRequest !== d.requestId) { Sim.clearQuestion(w, from); p.resumeRequest = d.requestId; }
+          this.sendGo(from, d.requestId);
+        }
         return;
       }
       const p = this.players.get(from); if (!p || !this.started) return;
@@ -31,7 +43,7 @@
       if (shuffle) list.sort(() => Math.random() - 0.5);
       list.forEach((p, i) => p.team = Math.floor(i / this.settings.teamSize));
     },
-    lobbyMsg() { return { t: "lobby", players: [...this.players.values()].map(p => [p.id, p.name, p.team]), settings: this.settings }; },
+    lobbyMsg() { return { t: "lobby", roomId: Net.id, players: [...this.players.values()].map(p => [p.id, p.name, p.team]), settings: this.settings }; },
     broadcastLobby() { Net.sendToClients(this.lobbyMsg()); renderHostLobby(); },
     start() {
       this.started = true;
@@ -49,8 +61,14 @@
       this.lastTick = performance.now();
       this.timer = setInterval(() => this.loop(), 50);
     },
-    sendGo() {
-      Net.sendToClients({ t: "go", settings: this.settings, players: [...this.players.values()].map(p => [p.id, p.name, p.team]) });
+    sendGo(to, requestId) {
+      const players = this.lobbyMsg().players;
+      for (const p of this.players.values()) {
+        if (to && p.id !== to) continue;
+        const w = this.worlds[p.team];
+        // /h로 보내므로 팀 구독이 아직 끝나지 않은 재접속도 첫 상태를 받는다.
+        Net.sendToClients({ t: "go", to: p.id, requestId, roomId: Net.id, settings: this.settings, players, snapshot: Sim.snapshot(w), playerState: Sim.resumeState(w, p.id) });
+      }
     },
     loop() {
       const now = performance.now(); let dt = (now - this.lastTick) / 1000; this.lastTick = now;
@@ -71,7 +89,7 @@
     },
     end() {
       clearInterval(this.timer);
-      for (const w of this.worlds) if (w.phase === "play") { w.phase = "end"; w.result = w.escaped > 0 ? "partial" : "timeout"; Net.sendToClients({ t: "ev", team: w.team, k: "end", result: w.result, escaped: w.escaped, total: w.players.size, wrongs: w.wrongs, fixed: w.fuses.filter(f => f.fixed).length }, w.team); }
+      for (const w of this.worlds) if (w.phase === "play") { w.phase = "end"; w.result = w.escaped > 0 ? "partial" : "timeout"; Net.sendToClients({ t: "ev", team: w.team, ...Sim.result(w) }, w.team); }
       $("end-body").innerHTML = HostView.results(this.worlds);
       $("end-title").textContent = "결과 — 오답 해설";
       show("end");
@@ -113,7 +131,7 @@
     show("host-lobby");
     setInterval(() => { if (!HostGame.started) HostGame.broadcastLobby(); }, 1500);
   };
-  $("btn-student").onclick = () => { show("client-lobby"); $("inp-name").focus(); };
+  $("btn-student").onclick = () => { fillSavedSession(); show("client-lobby"); $("inp-name").focus(); };
   $("btn-solo").onclick = () => {
     Horror.init();
     // 같은 페이지에서 호스트와 클라이언트를 함께
@@ -146,25 +164,101 @@
 
   // ---------------- 화면: 학생 ----------------
   let myTeam = -1, joined = false, gameStarted = false, lobbyInfo = null;
-  $("btn-join").onclick = () => {
+  const SESSION_KEY = "blackoutlab.session.v1";
+  let activeSession = null, joinTimer = null, lastHostAt = 0, lastJoinAt = 0, syncRequest = null, recovering = false, ending = false;
+  function readSession() {
+    try {
+      const s = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+      if (s && /^\d{4}$/.test(s.code) && typeof s.name === "string" && s.name.length > 0 && s.name.length <= 8 && typeof s.id === "string" && s.id.length >= 8 && s.id.length <= 80 && Number.isFinite(s.savedAt) && Date.now() - s.savedAt < 12 * 60 * 60 * 1000) return s;
+    } catch (e) {}
+    return null;
+  }
+  function saveSession() {
+    if (!activeSession) return;
+    activeSession.savedAt = Date.now();
+    try { localStorage.setItem(SESSION_KEY, JSON.stringify(activeSession)); } catch (e) {}
+  }
+  function forgetSession() { try { localStorage.removeItem(SESSION_KEY); } catch (e) {} }
+  function fillSavedSession() {
+    const s = readSession(); if (s) { $("inp-name").value = s.name; $("inp-code").value = s.code; }
+    $("btn-resume").style.display = s ? "" : "none";
+    if (s) $("btn-resume").textContent = `이전 게임 이어하기 · ${s.name} (${s.code})`;
+  }
+  function reconnectNotice(visible) {
+    $("reconnect").style.display = visible && gameStarted ? "flex" : "none";
+  }
+  function sendJoin() {
+    if (!activeSession || ending || document.hidden) return;
+    if (!syncRequest) syncRequest = Net.newId();
+    lastJoinAt = Date.now();
+    Net.sendToHost({ t: "join", name: activeSession.name, roomId: activeSession.roomId, requestId: syncRequest });
+  }
+  function recover() {
+    if (!activeSession || ending) return;
+    if (!recovering) { recovering = true; syncRequest = Net.newId(); Client.setConnectionLost(true); }
+    reconnectNotice(true);
+    if (!gameStarted) $("join-msg").textContent = "연결을 다시 확인하는 중… 방 코드와 선생님 화면을 확인하세요.";
+    Net.reconnect(); sendJoin();
+  }
+  function watchConnection() {
+    if (!activeSession || ending || document.hidden) return;
+    if (joined && Date.now() - lastHostAt > 4000 && !recovering) recover();
+    if ((!joined || recovering) && Date.now() - lastJoinAt >= 2000) sendJoin();
+    if (!joined && Date.now() - lastHostAt > 10000) $("join-msg").textContent = "방을 찾는 중… 방 코드와 선생님 화면을 확인하세요. 아래에서 취소 후 다시 입력할 수 있습니다.";
+  }
+  function cancelJoin() {
+    clearInterval(joinTimer); joinTimer = null; activeSession = null; syncRequest = null;
+    Client.stop(); Net.disconnect(); joined = false; gameStarted = false; recovering = false; myTeam = -1;
+    reconnectNotice(false); $("btn-join").disabled = false;
+    $("inp-name").disabled = $("inp-code").disabled = false;
+    $("btn-join-cancel").style.display = "none"; $("join-msg").textContent = "";
+    show("client-lobby"); fillSavedSession();
+  }
+  function joinGame() {
     const name = $("inp-name").value.trim(), code = $("inp-code").value.trim();
-    if (!name || code.length !== 4) { $("join-msg").textContent = "별명과 4자리 방 코드를 입력하세요."; return; }
+    if (!name || !/^\d{4}$/.test(code)) { $("join-msg").textContent = "별명과 4자리 방 코드를 입력하세요."; return; }
+    const saved = readSession();
+    activeSession = saved && saved.code === code && saved.name === name ? saved : { id: Net.newId(), code, name, roomId: null };
+    saveSession();
+    joined = false; gameStarted = false; recovering = false; ending = false; myTeam = -1; syncRequest = Net.newId();
+    lastHostAt = Date.now(); lastJoinAt = 0;
     Horror.init();
-    Net.join(code);
-    Net.onMessage(d => clientRecv(d));
+    Net.onMessage((d, from) => clientRecv(d, from));
+    Net.join(code, activeSession.id);
     $("btn-join").disabled = true; $("join-msg").textContent = "방을 찾는 중…";
-    const tryJoin = () => { if (!joined) { Net.sendToHost({ t: "join", name }); setTimeout(tryJoin, 2000); } };
-    setTimeout(tryJoin, 800);
-  };
+    $("inp-name").disabled = $("inp-code").disabled = true; $("btn-join-cancel").style.display = "";
+    clearInterval(joinTimer); joinTimer = setInterval(watchConnection, 1000); sendJoin();
+  }
+  $("btn-join").onclick = joinGame;
+  $("btn-resume").onclick = () => { fillSavedSession(); show("client-lobby"); joinGame(); };
+  $("btn-join-cancel").onclick = cancelJoin;
+  $("btn-reconnect").onclick = recover;
+  $("btn-reconnect-back").onclick = cancelJoin;
+  window.addEventListener("online", recover);
+  window.addEventListener("offline", recover);
+  document.addEventListener("visibilitychange", () => {
+    if (!activeSession || ending) return;
+    if (document.hidden) { recovering = true; syncRequest = Net.newId(); Client.setConnectionLost(true); }
+    else { Horror.resume(); recover(); }
+  });
   Net.onStatus(s => {
     const t = s.local ? "" : `연결 ${s.brokers}/3${s.peers ? " · 직접 연결" : ""}`;
     $("net-status").textContent = t; $("console-net").textContent = t;
   });
 
-  function clientRecv(d) {
+  function clientRecv(d, from) {
+    if (!d || ending || (d.to && d.to !== Net.id)) return;
+    if (d.t === "join-error" && activeSession && d.requestId === syncRequest) {
+      const message = d.reason; forgetSession(); cancelJoin(); $("join-msg").textContent = message; return;
+    }
+    if (activeSession && activeSession.roomId && from !== activeSession.roomId) return;
     if (d.t === "lobby") {
+      if (gameStarted) return;
       const mine = d.players.find(p => p[0] === Net.id);
-      if (mine) { joined = true; myTeam = mine[2]; Net.setTeam(myTeam); }
+      if (mine) {
+        joined = true; myTeam = mine[2]; Net.setTeam(myTeam); lastHostAt = Date.now(); recovering = false; syncRequest = null;
+        if (activeSession && !activeSession.roomId) { activeSession.roomId = from || d.roomId; saveSession(); }
+      }
       lobbyInfo = d;
       const mates = d.players.filter(p => p[2] === myTeam).map(p => p[1]);
       $("join-msg").innerHTML = mine ? `<b>${myTeam + 1}팀</b> — ${mates.join(", ")}<br><span class="muted">선생님이 시작하면 바로 시작됩니다. 소리를 켜 두세요.</span>` : "입장 중…";
@@ -173,19 +267,31 @@
     if (d.t === "go") {
       const mine = d.players.find(p => p[0] === Net.id);
       if (!mine) return;
-      joined = true;
-      if (gameStarted) return;
-      gameStarted = true; myTeam = mine[2]; Net.setTeam(myTeam);
+      if (syncRequest && d.requestId && d.requestId !== syncRequest) return;
       const names = {}; d.players.forEach(p => names[p[0]] = p[1]);
+      Client.setNames(names);
+      if (gameStarted && !syncRequest && !recovering) return;
+      joined = true; lastHostAt = Date.now(); myTeam = mine[2]; Net.setTeam(myTeam);
+      if (activeSession && !activeSession.roomId) { activeSession.roomId = from || d.roomId; saveSession(); }
+      if (!d.snapshot || !d.playerState) {
+        $("join-msg").textContent = "선생님 화면을 새로고침한 뒤 방을 다시 만들어 주세요."; return;
+      }
       const idx = d.players.filter(p => p[2] === myTeam).findIndex(p => p[0] === Net.id);
       if (!d.settings.seed) MapUtil.load(null); else if (MapUtil.seed !== d.settings.seed) MapUtil.load(MapGen.generate(d.settings.seed));
       show("game");
-      Client.start({ id: Net.id, team: myTeam, settings: d.settings, names, spawnIndex: idx, onEnd: clientEnd });
+      const wasStarted = gameStarted; gameStarted = true; recovering = false; syncRequest = null; reconnectNotice(false);
+      if (wasStarted) Client.restore(d.snapshot, d.playerState);
+      else Client.start({ id: Net.id, team: myTeam, settings: d.settings, names, spawnIndex: idx, onEnd: clientEnd, snapshot: d.snapshot, playerState: d.playerState });
       return;
     }
+    if (d.t === "roster") { const names = {}; d.players.forEach(p => names[p[0]] = p[1]); Client.setNames(names); return; }
+    if (d.t === "st" && d.team === myTeam && d.p.some(p => p[0] === Net.id)) lastHostAt = Date.now();
+    if (recovering) return; // 최신 위치를 받기 전에는 예전 좌표를 호스트에 덮어쓰지 않는다.
     Client.onMessage(d);
   }
   function clientEnd(e) {
+    if (ending) return; ending = true;
+    clearInterval(joinTimer); joinTimer = null; activeSession = null; forgetSession(); reconnectNotice(false);
     setTimeout(() => {
       Client.stop();
       const res = ({ escaped: "전원 탈출 성공", partial: "일부만 탈출", lost: "아무도 나오지 못했다", timeout: "시간이 다 됐다" })[e.result];
@@ -220,6 +326,7 @@
   $("modal-cancel").onclick = () => Client.cancelModal();
 
   // 타이틀 깜빡임
+  fillSavedSession();
   show("title");
   setInterval(() => { $("title-h1").style.opacity = Math.random() < 0.12 ? 0.2 + Math.random() * 0.5 : 1; }, 120);
 })();

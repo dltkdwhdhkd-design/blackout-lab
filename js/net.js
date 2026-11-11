@@ -8,7 +8,8 @@ window.Net = (function () {
   ];
   const PREFIX = "blackoutlab/v2/";
   if (window.__TEST_BROKERS) { BROKERS.length = 0; BROKERS.push(...window.__TEST_BROKERS); }
-  const myId = Math.random().toString(36).slice(2, 10);
+  const newId = () => window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+  let myId = newId(), wireId = newId(), generation = 0, peerTimer = null;
   let code = null, isHost = false, seq = 0;
   const clients = [];
   const seen = new Map(); // dedupe key -> time
@@ -25,7 +26,8 @@ window.Net = (function () {
   }
 
   function dedupe(m) {
-    const k = m.f + ":" + m.s;
+    // 같은 플레이어가 새로고침해도 새 연결의 첫 메시지가 중복으로 버려지지 않는다.
+    const k = m.f + ":" + (m.u || "") + ":" + m.s;
     const now = Date.now();
     if (seen.has(k)) return true;
     seen.set(k, now);
@@ -42,12 +44,13 @@ window.Net = (function () {
 
   function connectBrokers() {
     if (typeof mqtt === "undefined") return;
+    const gen = generation;
     BROKERS.forEach((url, i) => {
       try {
-        const c = mqtt.connect(url, { clientId: "bl_" + myId + "_" + i, keepalive: 30, reconnectPeriod: 4000, connectTimeout: 8000, clean: true });
-        c.on("connect", () => { subscribe(c); status(); });
-        c.on("message", (t, payload) => handleRaw(payload.toString()));
-        c.on("close", status); c.on("error", () => {});
+        const c = mqtt.connect(url, { clientId: "bl_" + wireId + "_" + i, keepalive: 15, reconnectPeriod: 3000, connectTimeout: 8000, clean: true, queueQoSZero: false });
+        c.on("connect", () => { if (gen === generation) { subscribe(c); status(); } });
+        c.on("message", (t, payload) => { if (gen === generation) handleRaw(payload.toString()); });
+        c.on("close", () => { if (gen === generation) status(); }); c.on("error", () => {});
         clients[i] = c;
       } catch (e) {}
     });
@@ -66,7 +69,7 @@ window.Net = (function () {
     for (const c of clients) if (c && c.connected && t >= 0) c.subscribe(PREFIX + code + "/t" + t);
   }
 
-  function pack(d) { return JSON.stringify({ f: myId, s: ++seq, d }); }
+  function pack(d) { return JSON.stringify({ f: myId, u: wireId, s: ++seq, d }); }
 
   function publish(topic, str) {
     for (const c of clients) if (c && c.connected) { try { c.publish(topic, str, { qos: 0 }); } catch (e) {} }
@@ -75,40 +78,65 @@ window.Net = (function () {
   // PeerJS
   function setupPeer() {
     if (typeof Peer === "undefined") return;
+    const gen = generation;
     try {
-      if (isHost) {
-        peer = new Peer("blackoutlab-" + code, { debug: 0 });
-        peer.on("connection", conn => {
-          conn.on("open", () => { peerConns.set(conn.peer, conn); status(); });
-          conn.on("data", d => handleRaw(d));
-          conn.on("close", () => { peerConns.delete(conn.peer); status(); });
-        });
-        peer.on("error", () => {});
-      } else {
-        peer = new Peer(undefined, { debug: 0 });
-        peer.on("open", () => {
-          hostConn = peer.connect("blackoutlab-" + code, { reliable: false });
-          hostConn.on("open", status);
-          hostConn.on("data", d => handleRaw(d));
-          hostConn.on("close", () => { hostConn = null; status(); });
-          hostConn.on("error", () => {});
-        });
-        peer.on("error", () => {});
-      }
+      const p = peer = new Peer(isHost ? "blackoutlab-" + code : undefined, { debug: 0 });
+      p.on("open", () => { if (gen === generation && peer === p) { if (!isHost) connectHostPeer(); status(); } });
+      p.on("connection", conn => {
+        if (gen !== generation || !isHost) { conn.close(); return; }
+        conn.on("open", () => { if (gen === generation) { peerConns.set(conn.peer, conn); status(); } });
+        conn.on("data", d => { if (gen === generation) handleRaw(d); });
+        conn.on("close", () => { if (gen === generation && peerConns.get(conn.peer) === conn) { peerConns.delete(conn.peer); status(); } });
+        conn.on("error", () => {});
+      });
+      p.on("disconnected", () => { if (gen === generation) status(); });
+      p.on("error", () => {}); // MQTT가 살아 있으면 게임은 계속된다.
     } catch (e) {}
+  }
+  function connectHostPeer() {
+    if (isHost || !peer || peer.destroyed || !peer.open) return;
+    if (hostConn && (hostConn.open || Date.now() - hostConn._openedAt < 10000)) return;
+    if (hostConn) { const old = hostConn; hostConn = null; try { old.close(); } catch (e) {} }
+    const gen = generation, conn = hostConn = peer.connect("blackoutlab-" + code, { reliable: false });
+    conn._openedAt = Date.now();
+    conn.on("open", () => { if (gen === generation && hostConn === conn) status(); });
+    conn.on("data", d => { if (gen === generation && hostConn === conn) handleRaw(d); });
+    const lost = () => { if (gen === generation && hostConn === conn) { hostConn = null; status(); } };
+    conn.on("close", lost); conn.on("error", lost);
+  }
+  function reconnect() {
+    if (!code || local) return;
+    for (const c of clients) if (c && !c.connected && !c.reconnecting) { try { c.reconnect(); } catch (e) {} }
+    try {
+      if (!peer || peer.destroyed) setupPeer();
+      else if (peer.disconnected) peer.reconnect();
+      else connectHostPeer();
+    } catch (e) {}
+    status();
+  }
+  function disconnect() {
+    generation++; clearInterval(peerTimer); peerTimer = null;
+    const oldClients = clients.splice(0), oldPeer = peer;
+    peer = null; hostConn = null; peerConns.clear();
+    local = null; code = null; myTeam = -1; seen.clear(); seq = 0; wireId = newId();
+    for (const c of oldClients) { try { c.end(true); } catch (e) {} }
+    if (oldPeer) { try { oldPeer.destroy(); } catch (e) {} }
   }
 
   // 공개 API
   function host(roomCode) {
-    isHost = true; code = roomCode;
+    disconnect(); myId = newId(); isHost = true; code = roomCode;
     connectBrokers(); setupPeer(); status();
+    peerTimer = setInterval(reconnect, 4000);
   }
-  function join(roomCode) {
-    isHost = false; code = roomCode;
+  function join(roomCode, playerId) {
+    disconnect(); myId = playerId || newId(); isHost = false; code = roomCode;
     connectBrokers(); setupPeer(); status();
+    peerTimer = setInterval(reconnect, 4000);
   }
   function startLocal(hostHandler) {
     // 같은 페이지 안에서 호스트 로직과 직접 연결 (연습 모드)
+    disconnect(); myId = newId(); isHost = false;
     local = { toHost: hostHandler };
     status();
   }
@@ -136,8 +164,8 @@ window.Net = (function () {
   function setLocalClient(fn) { if (local) local.toClient = fn; }
 
   return {
-    id: myId, host, join, startLocal, setLocalClient, sendToClients, sendToHost, setTeam, tagPeerTeam,
+    newId, host, join, reconnect, disconnect, startLocal, setLocalClient, sendToClients, sendToHost, setTeam, tagPeerTeam,
     onMessage(fn) { onMsg = fn; }, onStatus(fn) { onStatus = fn; },
-    get code() { return code; }, get isHost() { return isHost; },
+    get id() { return myId; }, get code() { return code; }, get isHost() { return isHost; },
   };
 })();

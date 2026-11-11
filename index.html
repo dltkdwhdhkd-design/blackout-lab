@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="format-detection" content="telephone=no">
 <title>BLACKOUT LAB — 정전</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=20261111-reconnect1">
 </head>
 <body>
 
@@ -17,6 +17,7 @@
     <h1 id="title-h1">BLACKOUT<br>LAB</h1>
     <p class="warn">⚠ 어둡고 큰 소리와 갑작스러운 장면이 나옵니다. 소리를 켜고, 가능하면 이어폰을 쓰세요.</p>
     <div class="btns">
+      <button id="btn-resume" class="big primary" style="display:none">이전 게임 이어하기</button>
       <button id="btn-teacher" class="big">교사 · 방 만들기</button>
       <button id="btn-student" class="big primary">학생 · 참가하기</button>
       <button id="btn-solo">혼자 연습</button>
@@ -58,6 +59,7 @@
     <input id="inp-name" maxlength="8" placeholder="별명 (실명 말고)">
     <input id="inp-code" maxlength="4" inputmode="numeric" placeholder="방 코드 4자리">
     <button id="btn-join" class="primary big">입장</button>
+    <button id="btn-join-cancel" class="ghost" style="display:none">취소 · 다시 입력</button>
     <p id="join-msg" class="muted"></p>
   </div>
 </section>
@@ -91,6 +93,19 @@
     </div>
   </div>
 </section>
+
+<!-- 실제 호스트 응답이 끊겼을 때 표시 -->
+<div id="reconnect" role="dialog" aria-modal="true" aria-labelledby="reconnect-title" style="display:none">
+  <div class="panel">
+    <h2 id="reconnect-title">다시 연결하는 중…</h2>
+    <p role="status">같은 팀과 캐릭터로 돌아갑니다. 인터넷 연결과 선생님 화면을 확인해 주세요.</p>
+    <p class="muted small">연결이 끊긴 동안에도 게임은 계속됩니다.</p>
+    <div class="row">
+      <button id="btn-reconnect" class="primary">다시 연결</button>
+      <button id="btn-reconnect-back" class="ghost">참가 화면으로</button>
+    </div>
+  </div>
+</div>
 
 <!-- 설정 -->
 <div id="options" style="display:none">
@@ -137,16 +152,16 @@
 <script src="js/props.js"></script>
 <script src="js/map.js"></script>
 <script src="js/mapgen.js"></script>
-<script src="js/net.js"></script>
+<script src="js/net.js?v=20261111-reconnect1"></script>
 <script src="js/audio.js"></script>
 <script src="js/options.js"></script>
 <script src="js/propart.js"></script>
 <script src="js/assets.js"></script>
 <script src="js/fps.js"></script>
 <script src="js/hand.js"></script>
-<script src="js/sim.js"></script>
-<script src="js/client.js"></script>
+<script src="js/sim.js?v=20261111-reconnect1"></script>
+<script src="js/client.js?v=20261111-reconnect1"></script>
 <script src="js/host.js"></script>
-<script src="js/main.js"></script>
+<script src="js/main.js?v=20261111-reconnect1"></script>
 </body>
 </html>

@@ -59,6 +59,7 @@ window.Sim = (function () {
         break;
       case "hide": {
         if (p.down || p.escaped) break;
+        if (!p.hid) p.hidePrev = { x: p.x, y: p.y, a: p.a };
         p.hid = { x: m.x, y: m.y }; p.hidT = w.elapsed;
         if (m.l !== undefined) p.light = !!m.l;
         const mo = w.monster;
@@ -66,7 +67,7 @@ window.Sim = (function () {
         p.seenHide = mo.state !== "sleep" && d < 7 && MapUtil.los(mo.x, mo.y, p.x, p.y);
         break;
       }
-      case "unhide": p.hid = null; p.seenHide = false; break;
+      case "unhide": leaveHiding(w, p); break;
       case "q": {
         if (p.down || p.escaped || w.phase !== "play") break;
         if (m.fuse === -1) {
@@ -321,15 +322,39 @@ window.Sim = (function () {
     return null;
   }
 
+  function leaveHiding(w, p) {
+    if (p.hid) {
+      const prev = p.hidePrev;
+      if (prev && !MapUtil.solidFor(Math.floor(prev.x), Math.floor(prev.y), w.exitOpen)) {
+        p.x = prev.x; p.y = prev.y; p.a = prev.a;
+      } else if (MapUtil.solidFor(Math.floor(p.x), Math.floor(p.y), w.exitOpen)) {
+        // 이전 버전에서 사물함 내부 좌표를 보낸 경우에도 바깥 바닥으로 꺼낸다.
+        const spots = [[0, 1], [0, -1], [1, 0], [-1, 0]].map(([dx, dy]) => ({ x: p.hid.x + dx, y: p.hid.y + dy }));
+        const s = spots.find(s => !MapUtil.solidFor(s.x, s.y, w.exitOpen)) || MapUtil.find("S")[0];
+        p.x = s.x + 0.5; p.y = s.y + 0.5;
+      }
+    }
+    p.hid = null; p.hidePrev = null; p.seenHide = false;
+  }
+  function clearQuestion(w, id) {
+    for (const target of [...w.fuses, w.breaker, w.cctv]) if (target.busy === id) target.busy = null;
+  }
+  function resumeState(w, id) {
+    const p = w.players.get(id);
+    return p ? { x: p.x, y: p.y, a: p.a, hid: p.hid, hidePrev: p.hidePrev || null, light: p.light } : null;
+  }
+  function result(w) {
+    return { k: "end", result: w.result, escaped: w.escaped, total: w.players.size, wrongs: w.wrongs, fixed: w.inserted };
+  }
   function catchPlayer(w, p) {
-    p.down = true; p.downT = w.elapsed; p.hid = null; p.caught++;
+    if (p.down || p.escaped) return;
+    leaveHiding(w, p);
+    p.down = true; p.downT = w.elapsed; p.rev = 0; p.revT = -9; p.caught++;
     const mo = w.monster; mo.state = "feed"; mo.timer = 3.5; mo.targetId = null;
     emit(w, { k: "caught", id: p.id, name: p.name });
     // 잡으면 들고 있던 셀을 그 자리에 떨어뜨린다 (팀원이 주울 수 있음)
     if (p.carry > 0) { w.drops.push({ id: ++w.dropSeq, x: p.x, y: p.y, n: p.carry }); emit(w, { k: "drop", id: p.id, name: p.name, n: p.carry }); p.carry = 0; }
-    for (const f of w.fuses) if (f.busy === p.id) f.busy = null;
-    if (w.breaker.busy === p.id) w.breaker.busy = null;
-    if (w.cctv.busy === p.id) w.cctv.busy = null;
+    clearQuestion(w, p.id);
     checkEnd(w);
   }
 
@@ -385,10 +410,11 @@ window.Sim = (function () {
       ins: w.inserted, dr: w.drops.map(d => [+d.x.toFixed(2), +d.y.toFixed(2), d.n]), mk: w.medkits.reduce((a, m) => a | (m.taken ? 1 << m.id : 0), 0),
       cc: Math.max(0, Math.ceil(w.cctv.until - w.elapsed)), ccl: Math.max(0, Math.ceil(w.cctv.cool - w.elapsed)),
       req: w.settings.requiredFuses, safe: Math.max(0, Math.round(w.settings.safeTime - w.elapsed)), it: +Math.max(0, w.introT).toFixed(1),
+      end: w.phase === "end" ? result(w) : undefined,
     };
   }
 
   function requiredMet(w) { return w.inserted >= w.settings.requiredFuses; }
 
-  return { DEFAULTS, PLAYER_SPEED, createWorld, addPlayer, handle, tick, snapshot, requiredMet };
+  return { DEFAULTS, PLAYER_SPEED, createWorld, addPlayer, handle, tick, snapshot, requiredMet, resumeState, clearQuestion, result };
 })();

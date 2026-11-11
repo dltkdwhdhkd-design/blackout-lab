@@ -20,18 +20,21 @@ window.Client = (function () {
   let slitSnap = null;
   let myCarry = 0, myMed = false;
   let lightOn = true, lightTipShown = false, hideTipShown = false, turnVel = 0, prevA = 0;
+  let connectionReady = true, inputBound = false, resetTouch = () => {}, hideAck = false, endDelivered = false;
   const isTouch = ("ontouchstart" in window) && window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const colors = ["#7ec8ff", "#ffd27e", "#9dff8a", "#ff9ad5", "#c9a6ff", "#ffb48a"];
   const el = id => document.getElementById(id);
 
   function start(opts) {
+    stop();
     me = opts.id; team = opts.team; settings = opts.settings; names = opts.names || {}; onEnd = opts.onEnd;
     cv = el("game-canvas"); ctx = cv.getContext("2d");
     Assets.init();
     resize(); window.addEventListener("resize", resize);
     const sp = MapUtil.find("S")[opts.spawnIndex % 6 || 0];
     pos = { x: sp.x + 0.5, y: sp.y + 0.5, a: 0 };
-    down = false; hidden = null; escaped = false; phase = "play"; modal = null; others.clear();
+    down = false; hidden = null; hidePrev = null; hideAck = false; escaped = false; phase = "play"; closeModal(); others.clear();
+    intro = null; endDelivered = false; connectionReady = !!opts.snapshot; resetControls(); finishScare();
     document.body.classList.toggle("pc", !isTouch);
     fuses = MapUtil.fuses(); breakerPos = MapUtil.find("B")[0]; S = null; mon = { x: -99, y: -99, tx: -99, ty: -99, state: "sleep", a: 0, speed: 0 };
     setupInput(); makeGrain(); mapImg = null; mapOpen = false; look = 0; lightOn = true; el("btn-light").classList.add("on");
@@ -39,9 +42,43 @@ window.Client = (function () {
     raf = requestAnimationFrame(frame);
     Horror.init(); Horror.resume();
     gore = false; flashOn = 1;
-    if (settings && settings.intro) beginIntro(); else { gore = true; showToast("정전이다. 실험실 단말기에서 에너지 셀을 회수해 발전기를 돌려라. 그것이 건물 안에 있다.", 6); }
+    if (settings && settings.intro && (!opts.snapshot || opts.snapshot.it > 0)) beginIntro(); else { gore = true; showToast("정전이다. 실험실 단말기에서 에너지 셀을 회수해 발전기를 돌려라. 그것이 건물 안에 있다.", 6); }
+    if (opts.snapshot) restore(opts.snapshot, opts.playerState);
   }
-  function stop() { running = false; cancelAnimationFrame(raf); if (document.pointerLockElement) document.exitPointerLock(); Horror.siren(false); }
+  function stop() { running = false; cancelAnimationFrame(raf); resetControls(); if (document.pointerLockElement) document.exitPointerLock(); Horror.siren(false); }
+  function resetControls() {
+    keys = {}; input.fwd = input.strafe = 0; holdRev = false; moving = false; resetTouch();
+  }
+  function restoreHud() { for (const id of ["hud", "toast", "btn-act", "btn-light"]) el(id).style.visibility = ""; }
+  function finishScare() { fx.jump = 0; restoreHud(); }
+  function clearInteraction() {
+    resetControls(); closeModal(); mapOpen = false;
+    if (hidden && hidePrev) pos = { ...hidePrev };
+    hidden = null; hidePrev = null; hideAck = false;
+  }
+  function setConnectionLost(lost) {
+    connectionReady = !lost;
+    if (lost) { resetControls(); closeModal(); mapOpen = false; if (document.pointerLockElement) document.exitPointerLock(); }
+  }
+  function restore(snapshot, playerState) {
+    resetControls(); closeModal(); mapOpen = false; finishScare();
+    onMessage(snapshot);
+    if (playerState) {
+      pos = { x: playerState.x, y: playerState.y, a: playerState.a };
+      hidden = !down && !escaped ? playerState.hid : null;
+      hidePrev = hidden ? playerState.hidePrev : null; hideAck = !!hidden;
+      lightOn = playerState.light !== false; el("btn-light").classList.toggle("on", lightOn);
+    }
+    if (intro) {
+      if (snapshot.it <= 0) finishIntro();
+      else {
+        const elapsed = Math.max(0, 15 - snapshot.it);
+        intro.t0 = performance.now() - elapsed * 1000;
+        for (const [key, t] of Object.entries({ alarm: 3, bang: 5, kill1: 6.4, shatter1: 7, kill2: 8.8, shatter2: 9.2, shatter3: 10.2, lunge: 11.5 })) if (elapsed > t) intro.done[key] = true;
+      }
+    }
+    connectionReady = true; lastPos = performance.now();
+  }
   function resize() { W = cv.width = window.innerWidth; H = cv.height = window.innerHeight; Fps.setup(W, H); }
   function makeGrain() {
     grain = document.createElement("canvas"); grain.width = grain.height = 128;
@@ -52,6 +89,8 @@ window.Client = (function () {
 
   // ---------- 입력: 왼쪽 스틱 이동, 오른쪽 드래그 회전 ----------
   function setupInput() {
+    if (inputBound) return; inputBound = true;
+    window.addEventListener("blur", resetControls);
     window.onkeydown = e => {
       const k = e.key.toLowerCase(); keys[k] = true;
       if (k === " " || k === "e") { e.preventDefault(); interactPress(); }
@@ -62,7 +101,9 @@ window.Client = (function () {
     window.onkeyup = e => { keys[e.key.toLowerCase()] = false; if (e.key === " " || e.key.toLowerCase() === "e") interactRelease(); };
     const stick = el("stick"), knob = el("stick-knob"), zone = el("touch-zone");
     let sid = null, sx = 0, sy = 0, tid = null, tx = 0;
+    resetTouch = () => { sid = tid = null; stick.style.display = "none"; knob.style.transform = ""; };
     zone.addEventListener("touchstart", e => {
+      if (!running || !connectionReady) return;
       for (const t of e.changedTouches) {
         if (sid === null && t.clientX < W * 0.45) { sid = t.identifier; sx = t.clientX; sy = t.clientY; stick.style.display = "block"; stick.style.left = (sx - 60) + "px"; stick.style.top = (sy - 60) + "px"; }
         else if (tid === null) { tid = t.identifier; tx = t.clientX; }
@@ -75,7 +116,7 @@ window.Client = (function () {
           if (d > 0) { dx = dx / d * m; dy = dy / d * m; }
           knob.style.transform = `translate(${dx}px,${dy}px)`;
           input.fwd = d > 8 ? -dy / 50 : 0; input.strafe = d > 8 ? dx / 50 : 0;
-        } else if (t.identifier === tid && !intro && !mapOpen && !Options.isOpen) { const dx = t.clientX - tx; tx = t.clientX; pos.a += dx * 0.0075 * Options.get("touchSens"); }
+        } else if (t.identifier === tid && connectionReady && !down && !intro && !mapOpen && !Options.isOpen) { const dx = t.clientX - tx; tx = t.clientX; pos.a += dx * 0.0075 * Options.get("touchSens"); }
       }
     }, { passive: true });
     const endT = e => { for (const t of e.changedTouches) { if (t.identifier === sid) { sid = null; input.fwd = input.strafe = 0; stick.style.display = "none"; knob.style.transform = ""; } if (t.identifier === tid) tid = null; } };
@@ -84,7 +125,7 @@ window.Client = (function () {
     zone.addEventListener("pointerdown", e => {
       if (e.pointerType !== "mouse") return;
       if (!locked) {
-        if (!modal && !Options.isOpen && zone.requestPointerLock) { try { const r = zone.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (err) {} }
+        if (connectionReady && !modal && !Options.isOpen && zone.requestPointerLock) { try { const r = zone.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (err) {} }
         return;
       }
       if (e.button === 0) interactPress();
@@ -95,7 +136,7 @@ window.Client = (function () {
     zone.addEventListener("pointerup", e => { if (e.pointerType === "mouse" && locked) interactRelease(); });
     document.addEventListener("pointerlockchange", () => { locked = document.pointerLockElement === zone; });
     document.addEventListener("mousemove", e => {
-      if (!locked || !running || intro || modal || mapOpen || Options.isOpen) return;
+      if (!locked || !running || !connectionReady || down || intro || modal || mapOpen || Options.isOpen) return;
       const k = Options.get("mouseSens");
       pos.a += (e.movementX || 0) * 0.0024 * k;
       look = Math.max(-0.28, Math.min(0.28, look - (e.movementY || 0) * 0.0015 * k * (Options.get("invertY") ? -1 : 1)));
@@ -119,22 +160,22 @@ window.Client = (function () {
     return null;
   }
   function interactPress() {
-    if (!running || down || escaped || modal || intro || mapOpen || Options.isOpen || phase !== "play") return;
+    if (!running || !connectionReady || down || escaped || modal || intro || mapOpen || Options.isOpen || phase !== "play") return;
     const n = nearest(); if (!n) return;
     if (n.kind === "fuse") Net.sendToHost({ t: "q", fuse: n.fuse.id });
     else if (n.kind === "breaker") Net.sendToHost({ t: "q", fuse: -1 });
     else if (n.kind === "cctv") Net.sendToHost({ t: "q", fuse: -2 });
     else if (n.kind === "med") Net.sendToHost({ t: "med", id: n.id });
     else if (n.kind === "hide") {
-      hidePrev = { x: pos.x, y: pos.y, a: pos.a }; hidden = { x: n.x, y: n.y }; Net.sendToHost({ t: "hide", x: n.x, y: n.y, l: lightOn ? 1 : 0 }); Horror.breath();
+      hidePrev = { x: pos.x, y: pos.y, a: pos.a }; hidden = { x: n.x, y: n.y }; hideAck = false; Net.sendToHost({ t: "hide", x: n.x, y: n.y, l: lightOn ? 1 : 0 }); Horror.breath();
       showToast(lightOn ? "사물함 안. 손전등이 켜져 있다 — 틈으로 빛이 샌다. (F로 끄기)" : "사물함 안. 숨을 죽여라.", 3);
     }
-    else if (n.kind === "unhide") { hidden = null; if (hidePrev) { pos.x = hidePrev.x; pos.y = hidePrev.y; pos.a = hidePrev.a; } Net.sendToHost({ t: "unhide" }); }
+    else if (n.kind === "unhide") { clearInteraction(); Net.sendToHost({ t: "unhide" }); }
     else if (n.kind === "rev") holdRev = n.id;
   }
   function interactRelease() { holdRev = false; }
   function toggleLight() {
-    if (!running || intro || down || escaped || phase !== "play") return;
+    if (!running || !connectionReady || intro || down || escaped || phase !== "play") return;
     lightOn = !lightOn; Horror.click();
     lastPos = 0; // 바로 알림
     if (!lightOn && !lightTipShown) { lightTipShown = true; showToast("손전등을 껐다. 그것도 나를 잘 못 본다. 바로 앞까지 오지 않는 한.", 3.5); }
@@ -153,17 +194,27 @@ window.Client = (function () {
       const seen = new Set();
       for (const p of d.p) {
         const [id, x, y, a, dn, hid, esc, rev, lt, cr, md] = p;
-        if (id === me) { down = !!dn; escaped = !!esc; revProgress = rev; myCarry = cr || 0; myMed = !!md; continue; }
+        if (id === me) {
+          if (down !== !!dn || escaped !== !!esc || (hidden && hideAck && !hid)) {
+            const revived = down && !dn;
+            clearInteraction(); pos = { x, y, a };
+            if (revived) finishScare();
+          }
+          if (dn || esc) { hidden = null; hidePrev = null; pos = { x, y, a }; }
+          if (hidden && hid) hideAck = true;
+          down = !!dn; escaped = !!esc; revProgress = rev; myCarry = cr || 0; myMed = !!md; continue;
+        }
         seen.add(id);
         let o = others.get(id); if (!o) { o = { x, y, a }; others.set(id, o); }
         o.tx = x; o.ty = y; o.a = a; o.down = !!dn; o.hid = !!hid; o.esc = !!esc; o.rev = rev; o.name = names[id] || ""; o.light = lt !== 0;
       }
       for (const id of [...others.keys()]) if (!seen.has(id)) others.delete(id);
+      if (d.end) handleEvent(d.end);
     } else if (d.t === "ev") { if (d.team !== team) return; handleEvent(d); }
   }
   function handleEvent(e) {
     switch (e.k) {
-      case "q": if (e.id === me) openModal(e); break;
+      case "q": if (e.id === me && connectionReady && !down && !escaped && phase === "play") openModal(e); break;
       case "fuse":
         if (e.ok) { Horror.right(); if (e.id === me && modal) modalResult(true); else showToast(`${e.by}: ${e.fuse === -1 ? "발전기 가동" : "에너지 셀을 꺼냈다"}`, 2.5); }
         else { Horror.wrong(); fx.static = 1; wrongFlashT = 1.2; if (e.id === me && modal) modalResult(false); else showToast(`${e.by} 오답 — 경보가 울렸다. 그것이 소리를 들었다.`, 3); }
@@ -187,10 +238,10 @@ window.Client = (function () {
         break;
       case "spotted": if (e.id === me) { fx.spotted = 1; Horror.scrape(); Horror.vibrate([60, 40, 60, 40, 200]); showToast("들켰다. 뛰어.", 2); } break;
       case "caught": if (e.id === me) jumpScare(); else { Horror.bang(); showToast(`${e.name}이(가) 쓰러졌다. 찾아가서 구해야 한다.`, 4); fx.shake = 0.6; } break;
-      case "revived": if (e.id === me) { down = false; fx.fade = 1; showToast(e.self ? "정신이 돌아왔다." : "팀원이 깨워 줬다.", 3); } else showToast(`${names[e.id] || "팀원"}이(가) 일어났다.`, 2); break;
+      case "revived": if (e.id === me) { clearInteraction(); finishScare(); down = false; fx.fade = 1; showToast(e.self ? "정신이 돌아왔다." : "팀원이 깨워 줬다.", 3); } else showToast(`${names[e.id] || "팀원"}이(가) 일어났다.`, 2); break;
       case "exit": Horror.right(); showToast("발전기 가동! 보안 출구가 열렸다. 남동쪽 끝, 보안 출구로.", 5); break;
       case "escaped": if (e.id === me) { escaped = true; Horror.lightsOn(); } else showToast(`${e.name} 탈출 성공`, 2.5); break;
-      case "end": phase = "end"; if (onEnd) onEnd(e); break;
+      case "end": phase = "end"; if (!endDelivered) { endDelivered = true; if (onEnd) onEnd(e); } break;
     }
   }
 
@@ -210,7 +261,7 @@ window.Client = (function () {
     el("modal-exp").textContent = ""; el("modal-cancel").style.display = "";
   }
   function answer(i) {
-    if (!modal || modal.answered) return;
+    if (!connectionReady || down || escaped || !modal || modal.answered) return;
     modal.answered = true; modal.chosen = i;
     [...el("modal-choices").children].forEach((b, j) => { b.disabled = true; if (j === i) b.classList.add("picked"); });
     Net.sendToHost({ t: "ans", fuse: modal.fuse, chosen: i });
@@ -221,12 +272,13 @@ window.Client = (function () {
     [...el("modal-choices").children].forEach((b, j) => { if (j === modal.correctPos) b.classList.add("correct"); else if (j === modal.chosen) b.classList.add("wrong"); });
     const okMsg = modal.fuse === -1 ? "발전기 가동! " : modal.fuse === -2 ? "CCTV 접속 성공. " : "셀을 꺼냈다 — 비상 발전기실로 가져가자. ";
     el("modal-exp").textContent = (ok ? okMsg : "인증 실패 — 경보! 그것이 이쪽으로 온다. 15초 잠김. ") + modal.item.e;
-    setTimeout(closeModal, ok ? 1500 : 2300);
+    const answeredModal = modal;
+    setTimeout(() => { if (modal === answeredModal) closeModal(); }, ok ? 1500 : 2300);
   }
   function cancelModal() { if (!modal || modal.answered) return; Net.sendToHost({ t: "cancelq", fuse: modal.fuse }); closeModal(); }
   function closeModal() { modal = null; el("modal").style.display = "none"; }
   function showToast(text, sec) { toast = { text, t: sec }; }
-  function jumpScare() { Horror.screech(); Horror.vibrate([400, 80, 600]); fx.jump = 1; fx.jumpT0 = performance.now(); fx.shake = 1.5; closeModal(); }
+  function jumpScare() { clearInteraction(); down = true; Horror.screech(); Horror.vibrate([400, 80, 600]); fx.jump = 1; fx.jumpT0 = performance.now(); fx.shake = 1.5; }
 
   // ---------- 인트로: 격리 실패 ----------
   const P = a => ({ x: a[0], y: a[1] });
@@ -247,7 +299,7 @@ window.Client = (function () {
   }
   function finishIntro() {
     intro = null; flashOn = 1; gore = true; Horror.siren(false);
-    el("hud").style.visibility = ""; el("btn-act").style.visibility = ""; el("btn-light").style.visibility = "";
+    restoreHud();
     showToast(`발전기를 돌려야 보안문이 열린다. 방마다 있는 장비에서 에너지 셀을 꺼내(문제) 비상 발전기실로 가져가라. 한 번에 2개까지, 모두 ${settings.requiredFuses}개. …그것은 아직 이 건물 안에 있다.`, 8);
   }
   function once(key, fn) { if (!intro.done[key]) { intro.done[key] = true; fn(); } }
@@ -323,6 +375,8 @@ window.Client = (function () {
     raf = requestAnimationFrame(frame);
   }
   function update(dt, now) {
+    if (fx.jump && now - fx.jumpT0 >= 1500) finishScare();
+    if (!connectionReady) { moving = false; return; }
     if (!intro && flashOn < 1) flashOn = Math.min(1, flashOn + dt * 1.4);
     if (dt > 0) { let da = pos.a - prevA; if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2; turnVel += (da / dt - turnVel) * 0.2; prevA = pos.a; }
     if (intro) { updateIntro(dt, now); for (const o of others.values()) { o.x = o.tx; o.y = o.ty; } mon.x = mon.tx; mon.y = mon.ty; if (now - lastPos > 500) { lastPos = now; Net.sendToHost({ t: "pos", x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), a: +pos.a.toFixed(2) }); } return; }
@@ -343,7 +397,7 @@ window.Client = (function () {
         pos.x = np.x; pos.y = np.y; moving = true; bobT += dt * 9;
       }
     }
-    if (hidden) { pos.x = hidden.x + 0.5; pos.y = hidden.y + 0.5; }
+    // 시점만 사물함 안으로 옮긴다. 몸과 셀이 떨어질 좌표는 바깥 바닥에 둔다.
     for (const o of others.values()) { o.x += (o.tx - o.x) * Math.min(1, dt * 10); o.y += (o.ty - o.y) * Math.min(1, dt * 10); }
     mon.x += (mon.tx - mon.x) * Math.min(1, dt * 8); mon.y += (mon.ty - mon.y) * Math.min(1, dt * 8);
     if (now - lastPos > 100 && !down && !escaped) { lastPos = now; Net.sendToHost({ t: "pos", x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), a: +pos.a.toFixed(2), l: lightOn ? 1 : 0 }); }
@@ -359,7 +413,6 @@ window.Client = (function () {
     const near = mon.state !== "sleep" ? Math.max(0, 1 - md / 7) : 0;
     if (Math.random() < near * 0.25) fx.flicker = 0.1 + Math.random() * 0.5; else fx.flicker += (1 - fx.flicker) * Math.min(1, dt * 14);
     if (mon.state === "chase" && md < 6) fx.shake = Math.max(fx.shake, 0.3);
-    if (fx.jump && now - fx.jumpT0 > 1500) fx.jump = 0;
     updateHud();
   }
   function updateHud() {
@@ -546,5 +599,5 @@ window.Client = (function () {
     c.fillStyle = `rgba(0,0,0,${Math.max(0, (t - 0.9) / 0.6)})`; c.fillRect(0, 0, W, H);
   }
 
-  return { start, stop, onMessage, cancelModal, get me() { return me; }, _dbg: { pos: () => pos, set: (x, y, a) => { pos.x = x; pos.y = y; if (a !== undefined) pos.a = a; }, mon: () => mon, S: () => S, down: () => down, modal: () => modal, hidden: () => hidden } };
+  return { start, stop, restore, setConnectionLost, setNames(value) { names = value; }, onMessage, cancelModal, get me() { return me; }, _dbg: { pos: () => pos, set: (x, y, a) => { pos.x = x; pos.y = y; if (a !== undefined) pos.a = a; }, mon: () => mon, S: () => S, down: () => down, modal: () => modal, hidden: () => hidden } };
 })();
