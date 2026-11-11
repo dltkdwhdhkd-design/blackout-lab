@@ -71,6 +71,7 @@
       show("end");
     },
   };
+  window.__host = HostGame; // 자동 시험용
   function logEvent(w, e) {
     const nm = id => (HostGame.players.get(id) || {}).name || "?";
     const txt = ({ hunt: "괴물이 기척을 쫓는 중", wake: "괴물이 움직이기 시작했다", caught: `${e.name} 잡힘`, revived: `${nm(e.id)} 회복${e.self ? "(스스로)" : ""}`, exit: "발전기 가동 — 출구 열림", escaped: `${e.name} 탈출`, end: `종료: ${e.result}`, spotted: `${nm(e.id)} 발견됨`, fuse: e.ok ? `${e.by} ${e.fuse === -1 ? "발전기 가동" : "에너지 셀 확보"}` : `${e.by} 오답 — 경보` })[e.k];
@@ -192,7 +193,8 @@
   document.addEventListener("dblclick", e => e.preventDefault(), { passive: false });
   document.addEventListener("touchmove", e => { if (e.touches.length > 1 || (e.scale !== undefined && e.scale !== 1)) e.preventDefault(); }, { passive: false });
   let lastTouchEnd = 0;
-  document.addEventListener("touchend", e => { const t = Date.now(); if (t - lastTouchEnd < 350 && !isField(e.target)) e.preventDefault(); lastTouchEnd = t; }, { passive: false });
+  // 버튼은 CSS(touch-action)로 이미 두 번 탭 확대가 꺼져 있으므로 막지 않는다 — 막으면 빠른 연속 탭(단말기 → 보기)이 씹힌다
+  document.addEventListener("touchend", e => { const t = Date.now(); const btn = e.target && e.target.closest && e.target.closest("button, label, a"); if (t - lastTouchEnd < 350 && !isField(e.target) && !btn) e.preventDefault(); lastTouchEnd = t; }, { passive: false });
   document.addEventListener("contextmenu", e => { if (!isField(e.target)) e.preventDefault(); });
 
   $("btn-mute").onclick = () => { const m = $("btn-mute").classList.toggle("muted"); Horror.setMuted(m); $("btn-mute").textContent = m ? "🔇" : "🔊"; };

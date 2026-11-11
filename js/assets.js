@@ -259,7 +259,7 @@ window.Assets = (function () {
     const has = n => PROVIDED.includes(n);
     for (const k of TEX_NAMES) if (has(k)) tryImage(k, im => { tex[k] = im; if (k === "wall") tex.wall2 = im; });
     [0, 1, 2, 3].forEach(i => { if (has("monster_" + i)) tryImage("monster_" + i, im => { spr.monster[i] = im; }); });
-    for (const k of ["mate", "mate_down", "console_on", "console_off", "generator", "generator_on", "researcher", "researcher_run", "body", "body2"]) if (has(k)) tryImage(k, im => { spr[k] = im; });
+    for (const k of ["hand_on", "hand_off", "mate", "mate_down", "console_on", "console_off", "generator", "generator_on", "researcher", "researcher_run", "body", "body2"]) if (has(k)) tryImage(k, im => { spr[k] = im; });
     if (has("scare")) tryImage("scare", im => { spr.scare = im; });
   }
   return { init, tex, spr, TEX };

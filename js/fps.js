@@ -40,14 +40,19 @@ window.Fps = (function () {
 
     // 천장/바닥
     const amb = st.ambient || 0;
+    const spot = flick > 0.01 && !amb;               // 손전등 빛 모드: 원형 광원 + 거리 감쇠
+    const tv = st.turn || 0, bobP = st.moving ? st.now / 180 : st.now / 900;
+    const beamX = RW / 2 - Math.max(-1, Math.min(1, tv * 0.25)) * RW * 0.05 + Math.cos(bobP * 0.5) * (st.moving ? 2.5 : 0.8) * RW / 320;
+    const beamY = horizon - RH * 0.035 + Math.sin(bobP) * (st.moving ? 3 : 0.8) * RW / 320;
+    const beamR = RW * 0.62;
     g.fillStyle = amb ? `rgb(${60 * amb | 0},${62 * amb | 0},${60 * amb | 0})` : "#050506"; g.fillRect(0, 0, RW, RH);
     const fg = g.createLinearGradient(0, horizon, 0, RH);
-    const fl = Math.max(flick * 0.6, amb, (st.glow || 0) * 0.5);
+    const fl = spot ? 1 : Math.max(flick * 0.6, amb, (st.glow || 0) * 0.5);
     fg.addColorStop(0, amb ? `rgb(${50 * amb | 0},${50 * amb | 0},${48 * amb | 0})` : "#0a0a0a"); fg.addColorStop(0.35, `rgb(${70 * fl | 0},${68 * fl | 0},${62 * fl | 0})`); fg.addColorStop(1, `rgb(${110 * fl | 0},${104 * fl | 0},${94 * fl | 0})`);
     g.fillStyle = fg; g.fillRect(0, horizon, RW, RH - horizon);
     // 바닥 손전등 웅덩이
     const pool = g.createRadialGradient(RW / 2, RH * 0.95, RW * 0.05, RW / 2, RH * 0.95, RW * 0.55);
-    pool.addColorStop(0, `rgba(255,240,200,${0.22 * flick})`); pool.addColorStop(1, "rgba(255,240,200,0)");
+    pool.addColorStop(0, `rgba(255,240,200,${(spot ? 0.08 : 0.22) * flick})`); pool.addColorStop(1, "rgba(255,240,200,0)");
     g.fillStyle = pool; g.fillRect(0, horizon, RW, RH - horizon);
     // 바닥 타일 느낌 (가로선)
     g.fillStyle = "rgba(0,0,0,0.25)";
@@ -77,9 +82,11 @@ window.Fps = (function () {
       let texX = Math.floor(wallX * tw);
       if ((side === 0 && rdx > 0) || (side === 1 && rdy < 0)) texX = tw - texX - 1;
       g.drawImage(tx, texX, 0, 1, th, x, top, 1, lineH);
-      let b = brightness(camX, perp, flick, st.ambient, st.glow) * (side ? 0.72 : 1);
+      let b = (spot ? atten(perp) : brightness(camX, perp, flick, st.ambient, st.glow)) * (side ? 0.74 : 1);
       g.fillStyle = `rgba(0,0,0,${1 - b})`; g.fillRect(x, top, 1, lineH);
     }
+
+    if (spot) applyBeam(g, beamX, beamY, beamR, flick);
 
     // 스프라이트
     const sprites = [];
@@ -117,7 +124,8 @@ window.Fps = (function () {
       const top = bottom - sh + yoff;
       const x0 = Math.floor(scrX - sw / 2), x1 = Math.ceil(scrX + sw / 2);
       const camX = trX / trY;
-      let b = brightness(camX, trY, flick, st.ambient, st.glow);
+      let b = spot ? atten(trY) * beamAt(scrX, Math.max(0, Math.min(RH, (top + bottom) / 2 + sh * 0.12)), beamX, beamY, beamR) * flick
+                   : brightness(camX, trY, flick, st.ambient, st.glow);
       if (s.kind === "mate" && s.light) b = Math.max(b, 0.55 / (1 + trY * 0.12)); // 팀원 손전등은 멀리서도 보인다
       if (s.kind === "console_on" || s.kind === "generator_on") b = Math.max(b, 0.35 / (1 + trY * 0.15)); // 화면 빛이 스스로 난다
       if (b < 0.03 && s.kind !== "monster") continue;
@@ -149,8 +157,16 @@ window.Fps = (function () {
       if (s.name && trY < 6 && b > 0.1) { g.fillStyle = `rgba(255,255,255,${0.8 * b})`; g.font = `${Math.max(7, 10 * RW / 320)}px sans-serif`; g.textAlign = "center"; g.fillText(s.name, scrX, Math.max(8, top - 3)); if (s.rev > 0) { g.fillStyle = "#222"; g.fillRect(scrX - 15, top - 14, 30, 3); g.fillStyle = "#9bff7a"; g.fillRect(scrX - 15, top - 14, 30 * Math.min(1, s.rev / 3), 3); } }
     }
 
-    // 좌우 가장자리 어둠 (손전등 원뿔)
-    const k = 1 - amb;
+    if (spot) {
+      // 빛이 닿은 면이 가까울수록 중심이 하얗게 번진다
+      const zc = zbuf[Math.max(0, Math.min(RW - 1, Math.round(beamX)))] || 10;
+      const near = Math.max(0, Math.min(1, 1.5 / zc));
+      const hot = g.createRadialGradient(beamX, beamY, 0, beamX, beamY, beamR * (0.22 + near * 0.18));
+      hot.addColorStop(0, `rgba(255,236,200,${(0.07 + near * 0.16) * flick})`); hot.addColorStop(1, "rgba(255,236,200,0)");
+      g.globalCompositeOperation = "lighter"; g.fillStyle = hot; g.fillRect(0, 0, RW, RH); g.globalCompositeOperation = "source-over";
+    }
+    // 좌우 가장자리 어둠 (손전등이 없을 때)
+    const k = spot ? 0 : 1 - amb;
     const side = g.createLinearGradient(0, 0, RW, 0);
     side.addColorStop(0, `rgba(0,0,0,${0.92 * k})`); side.addColorStop(0.22, `rgba(0,0,0,${(0.55 - flick * 0.2) * k})`); side.addColorStop(0.5, "rgba(0,0,0,0)"); side.addColorStop(0.78, `rgba(0,0,0,${(0.55 - flick * 0.2) * k})`); side.addColorStop(1, `rgba(0,0,0,${0.92 * k})`);
     g.fillStyle = side; g.fillRect(0, 0, RW, RH);
@@ -158,11 +174,48 @@ window.Fps = (function () {
     vert.addColorStop(0, `rgba(0,0,0,${0.85 * k})`); vert.addColorStop(0.35, "rgba(0,0,0,0)"); vert.addColorStop(1, `rgba(0,0,0,${0.2 * k})`);
     g.fillStyle = vert; g.fillRect(0, 0, RW, RH);
 
-    // 손전등 든 손
-    if (!st.downed && !st.noHand) drawHand(g, RW, RH, st, flick);
-
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(buf, 0, 0, W, H);
+    if (spot) drawDust(ctx, W, H, beamX * W / RW, beamY * H / RH, beamR * W / RW, flick, st.now);
+    // 손전등 든 손 (고해상도)
+    if (!st.downed && !st.noHand) Hand.draw(ctx, W, H, st, flick);
+  }
+
+  // ---------- 손전등 빛 ----------
+  // 원형 빛: 밝은 중심(핫스팟) → 테두리 → 퍼지는 빛 → 어둠. 화면 곱하기로 씌운다.
+  const BEAM = [[0, 1.0], [0.16, 0.97], [0.3, 0.84], [0.38, 0.55], [0.5, 0.3], [0.68, 0.14], [0.86, 0.06], [1, 0.025]];
+  function beamCurve(r) {
+    if (r >= 1) return BEAM[BEAM.length - 1][1];
+    for (let i = 1; i < BEAM.length; i++) if (r <= BEAM[i][0]) { const [r0, v0] = BEAM[i - 1], [r1, v1] = BEAM[i]; return v0 + (v1 - v0) * (r - r0) / (r1 - r0); }
+    return BEAM[BEAM.length - 1][1];
+  }
+  function beamAt(x, y, cx, cy, R) { return beamCurve(Math.hypot(x - cx, (y - cy) * 1.08) / R); }
+  function applyBeam(g, cx, cy, R, flick) {
+    const gr = g.createRadialGradient(cx, cy, 0, cx, cy, R);
+    for (const [r, v] of BEAM) {
+      const k = v * flick;   // 따뜻한 백열 색
+      gr.addColorStop(r, `rgb(${Math.min(255, 255 * k) | 0},${Math.min(255, 243 * k) | 0},${Math.min(255, 220 * k) | 0})`);
+    }
+    g.save(); g.globalCompositeOperation = "multiply"; g.fillStyle = gr; g.fillRect(0, 0, RW, RH); g.restore();
+  }
+  // 거리 감쇠: 가까운 곳은 환하고 멀어질수록 빛이 약해진다
+  function atten(d) { return 1 / (1 + (d / 5.2) * (d / 5.2)); }
+  // 빛줄기 속 먼지
+  const dust = Array.from({ length: 46 }, () => ({ x: Math.random() * 2 - 1, y: Math.random() * 2 - 1, z: Math.random(), vx: (Math.random() - 0.5) * 0.02, vy: (Math.random() - 0.5) * 0.02 + 0.004 }));
+  let dustT = 0;
+  function drawDust(ctx, W, H, cx, cy, R, flick, now) {
+    const dt = Math.min(0.05, (now - dustT) / 1000 || 0); dustT = now;
+    ctx.save(); ctx.globalCompositeOperation = "lighter";
+    for (const d of dust) {
+      d.x += d.vx * dt * 6; d.y += d.vy * dt * 6;
+      if (d.x < -1 || d.x > 1 || d.y < -1 || d.y > 1) { d.x = Math.random() * 2 - 1; d.y = -1; d.z = Math.random(); }
+      const rr = Math.hypot(d.x, d.y); if (rr > 0.6) continue;
+      const a = (1 - rr / 0.6) * 0.35 * flick * (0.5 + d.z * 0.5);
+      const sz = 1 + d.z * 1.6;
+      ctx.fillStyle = `rgba(255,240,210,${a})`;
+      ctx.fillRect(cx + d.x * R * 0.55, cy + d.y * R * 0.45, sz, sz);
+    }
+    ctx.restore();
   }
   function brightness(camX, dist, flick, ambient, glow) {
     const cone = Math.max(0.05, 1 - camX * camX * 0.85);
@@ -171,21 +224,6 @@ window.Fps = (function () {
     if (glow) b = Math.max(b, glow / (1 + dist * dist * 0.55)); // 손전등을 끄면 바로 앞만 겨우 보인다
     if (ambient) b = Math.max(b, ambient * Math.min(1, 4 / (1 + dist * 0.35)));
     return Math.max(0, Math.min(1, b));
-  }
-  function drawHand(g, RW, RH, st, flick) {
-    const bob = Math.sin(st.now / 180) * (st.moving ? 3 : 0.6) * RW / 320;
-    const bx = RW * 0.72 + Math.cos(st.now / 360) * (st.moving ? 2 : 0), by = RH * 0.86 + bob;
-    g.save(); g.translate(bx, by); g.rotate(-0.25);
-    // 팔
-    g.fillStyle = "#14151a"; g.beginPath(); g.moveTo(-RW * 0.05, RH * 0.3); g.lineTo(RW * 0.14, RH * 0.3); g.lineTo(RW * 0.08, -RH * 0.02); g.lineTo(-RW * 0.02, 0); g.closePath(); g.fill();
-    // 손
-    g.fillStyle = "#b9a48e"; g.beginPath(); g.ellipse(RW * 0.03, 0, RW * 0.05, RH * 0.05, 0.2, 0, 7); g.fill();
-    g.fillStyle = "#9d8974"; for (let i = 0; i < 4; i++) g.fillRect(-RW * 0.01 + i * RW * 0.018, -RH * 0.04, RW * 0.014, RH * 0.05);
-    // 손전등
-    g.fillStyle = "#3a3c42"; g.fillRect(-RW * 0.02, -RH * 0.12, RW * 0.045, RH * 0.14);
-    g.fillStyle = "#55585f"; g.fillRect(-RW * 0.03, -RH * 0.17, RW * 0.065, RH * 0.06);
-    g.fillStyle = `rgba(255,246,210,${0.75 * flick})`; g.fillRect(-RW * 0.03, -RH * 0.175, RW * 0.065, RH * 0.012);
-    g.restore();
   }
   return { render, setup };
 })();

@@ -17,7 +17,8 @@ window.Client = (function () {
   let fuses = MapUtil.fuses(), breakerPos = MapUtil.find("B")[0];
   let onEnd = null, grain = null, wrongFlashT = 0, bobT = 0;
   let intro = null, gore = false, flashOn = 1, locked = false, look = 0, mapOpen = false, mapImg = null;
-  let lightOn = true, lightTipShown = false, hideTipShown = false;
+  let slitSnap = null;
+  let lightOn = true, lightTipShown = false, hideTipShown = false, turnVel = 0, prevA = 0;
   const isTouch = ("ontouchstart" in window) && window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const colors = ["#7ec8ff", "#ffd27e", "#9dff8a", "#ff9ad5", "#c9a6ff", "#ffb48a"];
   const el = id => document.getElementById(id);
@@ -30,6 +31,7 @@ window.Client = (function () {
     const sp = MapUtil.find("S")[opts.spawnIndex % 6 || 0];
     pos = { x: sp.x + 0.5, y: sp.y + 0.5, a: 0 };
     down = false; hidden = null; escaped = false; phase = "play"; modal = null; others.clear();
+    document.body.classList.toggle("pc", !isTouch);
     setupInput(); makeGrain(); mapImg = null; mapOpen = false; look = 0; lightOn = true; el("btn-light").classList.add("on");
     running = true; last = performance.now();
     raf = requestAnimationFrame(frame);
@@ -301,6 +303,7 @@ window.Client = (function () {
   }
   function update(dt, now) {
     if (!intro && flashOn < 1) flashOn = Math.min(1, flashOn + dt * 1.4);
+    if (dt > 0) { let da = pos.a - prevA; if (da > Math.PI) da -= Math.PI * 2; if (da < -Math.PI) da += Math.PI * 2; turnVel += (da / dt - turnVel) * 0.2; prevA = pos.a; }
     if (intro) { updateIntro(dt, now); for (const o of others.values()) { o.x = o.tx; o.y = o.ty; } mon.x = mon.tx; mon.y = mon.ty; if (now - lastPos > 500) { lastPos = now; Net.sendToHost({ t: "pos", x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), a: +pos.a.toFixed(2) }); } return; }
     let fwd = input.fwd, strafe = input.strafe, turn = 0;
     if (keys["w"] || keys["arrowup"]) fwd += 1; if (keys["s"] || keys["arrowdown"]) fwd -= 1;
@@ -341,7 +344,7 @@ window.Client = (function () {
   function updateHud() {
     const n = nearest(); const b = el("btn-act");
     const label = !n ? "" : n.kind === "fuse" ? "셀 회수" : n.kind === "breaker" ? "발전기 가동" : n.kind === "hide" ? "숨기" : n.kind === "unhide" ? "나오기" : "구조 (꾹)";
-    b.textContent = label; b.classList.toggle("on", !!n && !down && !escaped && !modal && phase === "play");
+    b.textContent = !isTouch && label ? (n.kind === "rev" ? "E 꾹 · " : "E · ") + label.replace(" (꾹)", "") : label; b.classList.toggle("on", !!n && !down && !escaped && !modal && phase === "play");
     if (S) {
       const fixed = countBits(S.f);
       const room = MapUtil.roomAt(pos.x, pos.y);
@@ -374,7 +377,7 @@ window.Client = (function () {
       pos: view, fuses, fmask: S ? S.f : 0, exitOpen: !!(S && S.e), flicker: (lightOn || down ? (hidden ? 0.25 : (down ? 0.3 : fx.flicker)) : 0) * flashOn,
       glow: lightOn || down ? 0 : 0.16,
       monster: mon, others: [...others.values()], now, downed: down, moving, pitch: Math.sin(bobT) * (moving ? 4 : 0), gore,
-      look: hidden ? 0 : look,
+      look: hidden ? 0 : look, turn: hidden ? 0 : turnVel,
     });
     ctx.restore();
     if (hidden) drawLockerSlit(ctx);
@@ -423,7 +426,9 @@ window.Client = (function () {
     c.fillText("지도를 보는 동안은 움직일 수 없다 · M 또는 지도 버튼으로 닫기", W / 2, oy - 7);
   }
   function drawLockerSlit(c) {
-    const snap = document.createElement("canvas"); snap.width = W; snap.height = H; snap.getContext("2d").drawImage(cv, 0, 0);
+    if (!slitSnap) slitSnap = document.createElement("canvas");
+    if (slitSnap.width !== W || slitSnap.height !== H) { slitSnap.width = W; slitSnap.height = H; }
+    const snap = slitSnap; snap.getContext("2d").drawImage(cv, 0, 0);
     c.fillStyle = "#000"; c.fillRect(0, 0, W, H);
     for (const s of [-0.08, 0, 0.08]) { c.save(); c.beginPath(); c.rect(W * (0.5 + s) - W * 0.012, H * 0.18, W * 0.024, H * 0.6); c.clip(); c.drawImage(snap, 0, 0); c.restore(); }
     c.fillStyle = "rgba(255,255,255,0.45)"; c.font = `${Math.min(W, H) * 0.035}px sans-serif`; c.textAlign = "center";

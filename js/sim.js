@@ -304,7 +304,7 @@ window.Sim = (function () {
     const alive = [...w.players.values()].filter(p => !p.escaped);
     if (!w.players.size) return;
     if (alive.length === 0) { end(w, "escaped"); return; }
-    if (alive.every(p => p.down)) { end(w, "lost"); return; }
+    if (alive.every(p => p.down)) { end(w, w.escaped > 0 ? "partial" : "lost"); return; }
     if (w.time <= 0) { end(w, w.escaped > 0 ? "partial" : "timeout"); }
   }
   function end(w, result) {
