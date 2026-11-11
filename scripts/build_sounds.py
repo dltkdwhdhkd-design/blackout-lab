@@ -1,130 +1,130 @@
-"""Original BLACKOUT LAB effects. Rebuild with Python + NumPy/SciPy + ffmpeg.
-No recordings or third-party samples. Formant voices, foley and designed impacts.
+"""Build licensed recordings for BLACKOUT LAB. See audio/CREDITS.md.
+Requires Python, NumPy, SciPy, ffmpeg and libarchive. No voice/noise synthesis.
+Source downloads are cached locally and verified with SHA-256.
 """
 from pathlib import Path
-import json, subprocess, tempfile
+from urllib.request import urlopen
+import ctypes as C
+import ctypes.util
+import hashlib, json, subprocess, tempfile, zipfile
 import numpy as np
 from scipy import signal
 from scipy.io import wavfile
+ROOT=Path(__file__).resolve().parents[1]
+OUT=ROOT/'audio'
+CACHE=ROOT/'.openai'/'audio-sources'
+SR=44100
+SOURCES=[
+ ('horror.zip','https://opengameart.org/sites/default/files/Horror%20Sound%20Library.zip','b14cdd3403013696a7dc85ed0f782aa3359a731aacb017c15d7cd9544f98fb31'),
+ ('metal_steps.7z','https://opengameart.org/sites/default/files/metal_steps_48k24b.7z','3df6f81f669dd2f5bf83b8dab46cd0942bd86e7d33cc4409f1ba8470a9df488d')]
 
-ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / 'audio'
-SR = 32000
-rng = np.random.default_rng(71112026)
+def download():
+ CACHE.mkdir(parents=True,exist_ok=True)
+ for name,url,digest in SOURCES:
+  path=CACHE/name
+  if not path.exists():
+   print('Downloading',name,flush=True)
+   with urlopen(url,timeout=90) as response: data=response.read()
+   if hashlib.sha256(data).hexdigest()!=digest: raise ValueError('Source checksum changed: '+name)
+   path.write_bytes(data)
+  if hashlib.sha256(path.read_bytes()).hexdigest()!=digest: raise ValueError('Invalid cache: '+name)
 
-def timeline(d): return np.arange(round(d*SR))/SR
-def norm(x, peak=1): return x * (peak/(np.max(np.abs(x))+1e-9))
-def filt(x, hz, kind='lowpass', order=2):
-    return signal.sosfilt(signal.butter(order,hz,btype=kind,fs=SR,output='sos'),x)
-def contour(t, points): return np.interp(t,*zip(*points))
-def fades(x, attack=.008, release=.08):
-    x=x.copy(); a=min(len(x),round(attack*SR)); b=min(len(x),round(release*SR))
-    x[:a]*=np.linspace(0,1,a)**1.3; x[-b:]*=np.linspace(1,0,b)**1.5; return x
+def extract_steps(directory):
+ library=ctypes.util.find_library('archive')
+ if not library: raise RuntimeError('Install libarchive to extract the CC0 footsteps.')
+ a=C.CDLL(library); a.archive_read_new.restype=C.c_void_p
+ for name,args,result in [
+  ('archive_read_support_format_7zip',[C.c_void_p],C.c_int),
+  ('archive_read_support_filter_all',[C.c_void_p],C.c_int),
+  ('archive_read_open_filename',[C.c_void_p,C.c_char_p,C.c_size_t],C.c_int),
+  ('archive_read_next_header',[C.c_void_p,C.POINTER(C.c_void_p)],C.c_int),
+  ('archive_entry_pathname',[C.c_void_p],C.c_char_p),
+  ('archive_read_data',[C.c_void_p,C.c_void_p,C.c_size_t],C.c_ssize_t),
+  ('archive_read_free',[C.c_void_p],C.c_int)]:
+  fn=getattr(a,name);fn.argtypes=args;fn.restype=result
+ h=a.archive_read_new()
+ try:
+  a.archive_read_support_filter_all(h);a.archive_read_support_format_7zip(h)
+  if a.archive_read_open_filename(h,str(CACHE/'metal_steps.7z').encode(),10240)!=0: raise RuntimeError('Cannot open archive')
+  entry=C.c_void_p();buf=C.create_string_buffer(65536)
+  while True:
+   status=a.archive_read_next_header(h,C.byref(entry))
+   if status==1: break
+   if status!=0: raise RuntimeError('Invalid archive entry')
+   name=a.archive_entry_pathname(entry).decode();chunks=[]
+   while True:
+    n=a.archive_read_data(h,buf,len(buf))
+    if n==0: break
+    if n<0: raise RuntimeError('Corrupt archive')
+    chunks.append(buf.raw[:n])
+   if name.endswith('.wav'): (directory/Path(name).name).write_bytes(b''.join(chunks))
+ finally: a.archive_read_free(h)
 
-def voice(d, pitch, formants, rough=.25):
-    t=timeline(d)
-    jitter=filt(rng.normal(size=len(t)),38); jitter=norm(jitter)
-    f0=contour(t,pitch)*(1+.018*np.sin(2*np.pi*5.7*t)+.042*jitter)
-    phase=np.cumsum(f0)/SR*2*np.pi
-    source=sum(np.sin(h*phase+.06*np.sin(2*np.pi*(31+h*.3)*t))/(h**1.15) for h in range(1,39))
-    source*=1-rough+rough*(.5+.5*np.sin(phase/2+.6*np.sin(2*np.pi*9*t)))
-    air=filt(rng.normal(size=len(t)),[300,6500],'bandpass')
-    source=np.tanh(source*1.1)+.13*air
-    voiced=np.zeros(len(t))
-    for freq,bw,amp in formants:
-        b,a=signal.iirpeak(freq,freq/bw,fs=SR)
-        voiced+=amp*signal.lfilter(b,a,source)
-    voiced=norm(voiced)*(.86+.14*np.sin(2*np.pi*(10+rough*30)*t))
-    return fades(voiced,.055,.24)
+def norm(x,peak=.82): return x*peak/max(1e-9,float(np.max(abs(x))))
+def fades(x,attack=.003,release=.06):
+ x=x.copy();a=min(len(x),round(attack*SR));b=min(len(x),round(release*SR))
+ if a: x[:a]*=np.linspace(0,1,a)
+ if b: x[-b:]*=np.linspace(1,0,b)
+ return x
 
-def echo(x, tail=.45, wet=.22):
-    out=np.pad(x,(0,round(tail*SR)))
-    for delay,g in [(0.027,.6),(.061,.42),(.113,.28),(.187,.18),(.293,.1)]:
-        n=round(delay*SR); out[n:n+len(x)]+=filt(x,3600)*g*wet
-    return fades(out,.004,.1)
+def decode(path):
+ raw=subprocess.check_output(['ffmpeg','-v','error','-i',str(path),'-f','f32le','-ac','1','-ar',str(SR),'-'])
+ return np.frombuffer(raw,dtype=np.float32).copy()
 
-def scream(high=False):
-    d=1.75 if high else 1.55; t=timeline(d)
-    pts=[(0,180),(.09,330),(.25,610),(.65,540),(1.0,380),(1.2,420),(d,170)] if high else [(0,135),(.1,275),(.28,440),(.7,390),(1.1,300),(d,120)]
-    f=[(870,180,1),(1390,260,.75),(2950,450,.4)] if high else [(760,190,1),(1180,220,.7),(2450,380,.35)]
-    y=voice(d,pts,f,.38)
-    env=contour(t,[(0,0),(.04,.35),(.12,1),(.7,.9),(1.05,.6),(d-.2,.25),(d,0)])
-    # A broken exhalation, involuntary pitch break, and breath at the end.
-    y*=env*(1-.3*np.exp(-((t-.94)/.035)**2))
-    y+=.10*filt(rng.normal(size=len(t)),[700,4200],'bandpass')*env
-    return echo(y,wet=.32)
+def room(x,wet=.12):
+ # Short quiet reflections preserve the recorded voice and footstep transients.
+ out=np.pad(x,(0,round(.32*SR)))
+ for delay,gain in [(.037,1),(.079,.62),(.137,.32),(.229,.15)]:
+  start=round(delay*SR);out[start:start+len(x)]+=x*gain*wet
+ return fades(out,.002,.05)
 
-def growl(snarl=False):
-    d=1.1 if snarl else 2.9; t=timeline(d)
-    p=[(0,55),(.13,128),(.4,92),(d,42)] if snarl else [(0,42),(.5,61),(1.2,48),(2.0,75),(d,36)]
-    y=voice(d,p,[(280,110,1),(690,210,.72),(1730,480,.42)],.8)
-    phase=np.cumsum(contour(t,p))/SR*2*np.pi
-    sub=np.sin(phase/2)*(.5+.5*np.sin(2*np.pi*13*t)**2)
-    rasp=filt(rng.normal(size=len(t)),[500,2600],'bandpass')*(.5+.5*np.sin(2*np.pi*34*t))
-    env=contour(t,[(0,0),(.08 if snarl else .35,1),(d*.65,.8),(d,0)])
-    return echo(np.tanh(y*1.8)*.65*env+.22*sub*env+.12*rasp*env,wet=.4)
+def mix(parts):
+ out=np.zeros(max(round(at*SR)+len(x) for at,x,g in parts))
+ for at,x,g in parts:
+  start=round(at*SR);out[start:start+len(x)]+=x*g
+ return fades(out)
 
-def breath():
-    t=timeline(3.4); n=rng.normal(size=len(t))
-    air=filt(n,[180,2300],'bandpass'); throat=filt(n,[340,800],'bandpass')
-    env=np.exp(-((t-.8)/.5)**2)+.85*np.exp(-((t-2.3)/.62)**2)
-    y=air*.3+throat*(.7+.3*np.sin(2*np.pi*28*t))
-    return echo(norm(y)*env,wet=.18)
-
-def foot(variant=0):
-    t=timeline(.65); phase=2*np.pi*np.cumsum(45+90*np.exp(-t*34))/SR
-    weight=.7*np.sin(phase)*np.exp(-t*15)+.23*np.sin(phase*2.4)*np.exp(-t*30)
-    crack=filt(rng.normal(size=len(t)),[400,4000],'bandpass')*np.exp(-t*48)*.3
-    drag=filt(rng.normal(size=len(t)),[230,1500],'bandpass')*.27*np.exp(-((t-.13-variant*.04)/.07)**2)
-    chain=sum(np.sin(2*np.pi*f*t)*np.exp(-t*(22+i*4)) for i,f in enumerate([930,1477,2190]))*.022
-    return echo(fades(weight+crack+drag+chain,.002,.16),tail=.32,wet=.27)
-
-def impact():
-    t=timeline(1.3)
-    y=np.sin(2*np.pi*np.cumsum(32+105*np.exp(-t*22))/SR)*np.exp(-t*7)
-    y+=filt(rng.normal(size=len(t)),[120,4300],'bandpass')*np.exp(-t*26)*.65
-    return echo(fades(y,.002,.15),tail=.5,wet=.3)
-
-def bed():
-    t=timeline(6.4); n=len(t)
-    # Disordered bowed-metal harmonics and low pressure, no pitched melody.
-    y=sum(np.sin(2*np.pi*f*t+.3*np.sin(2*np.pi*(.17+i*.13)*t))/(1+i*.5) for i,f in enumerate([41,57.3,82.8,123.7,187.1]))*.13
-    pulse=(.45+.55*np.sin(2*np.pi*1.25*t)**8)
-    y+=filt(rng.normal(size=n),[80,430],'bandpass')*.6*pulse
-    y+=filt(rng.normal(size=n),[1400,2100],'bandpass')*.07*(.5+.5*np.sin(2*np.pi*.62*t))
-    # Crossfade the endpoints for a seamless pressure loop.
-    size=round(.4*SR); x=np.linspace(0,1,size)
-    join=y[-size:]*(1-x)+y[:size]*x
-    return np.r_[join,y[size:-size]]
-
-def mix(parts,duration):
-    out=np.zeros(round(duration*SR))
-    for at,x,g in parts:
-        n=round(at*SR); length=min(len(x),len(out)-n);out[n:n+length]+=x[:length]*g
-    return out
-
-OUT.mkdir(exist_ok=True)
-a,b=scream(),scream(True); gr,sn=growl(),growl(True); hit=impact()
-clips={'monster_growl':gr,'monster_snarl':sn,'monster_breath':breath(),
-       'monster_step_a':foot(),'monster_step_b':foot(1),'scream_a':a,'scream_b':b,
-       'impact':hit,'pursuit_loop':bed()}
-clips['capture']=mix([(0,sn,.55),(.045,hit,.62),(.13,b,.7),(.73,gr,.3)],3.6)
-clips['wake']=mix([(0,gr,.6),(.08,hit,.38),(.48,sn,.35)],3.4)
-manifest=[]
-with tempfile.TemporaryDirectory() as tmp:
-    for name,data in clips.items():
-        data=filt(data,45,'highpass')
-        data=np.tanh(norm(data)*1.25)
-        data=norm(data,.82)
-        if name!='pursuit_loop':data=fades(data,.003,.1)
-        wav=Path(tmp)/(name+'.wav');mp3=OUT/(name+'.mp3')
-        wavfile.write(wav,SR,(data*32767).astype(np.int16))
-        subprocess.run(['ffmpeg','-v','error','-y','-i',str(wav),'-c:a','libmp3lame','-b:a','80k','-ar',str(SR),'-map_metadata','-1',str(mp3)],check=True)
-        decoded=subprocess.check_output(['ffmpeg','-v','error','-i',str(mp3),'-f','f32le','-ac','1','-ar',str(SR),'-'])
-        pcm=np.frombuffer(decoded,dtype=np.float32)
-        assert np.isfinite(pcm).all() and np.max(abs(pcm))<.99
-        assert np.sqrt(np.mean(pcm**2))>.025
-        manifest.append({'name':name,'seconds':round(len(pcm)/SR,3),'bytes':mp3.stat().st_size,'peak':round(float(np.max(abs(pcm))),4)})
-(OUT/'manifest.json').write_text(json.dumps({'sampleRate':SR,'origin':'Original synthesized sound design; no third-party recordings.','clips':manifest},indent=2)+'\n')
-print(json.dumps(manifest,indent=2))
-print('TOTAL BYTES',sum(x['bytes'] for x in manifest))
+def main():
+ download();OUT.mkdir(exist_ok=True)
+ with tempfile.TemporaryDirectory() as tmp:
+  source=Path(tmp)
+  with zipfile.ZipFile(CACHE/'horror.zip') as z:
+   for name in z.namelist():
+    if name.startswith('Horror Sound Library/Wav/') and name.endswith('.wav'):
+     (source/Path(name).name).write_bytes(z.read(name))
+  extract_steps(source)
+  def clip(name,rate=1):
+   x=decode(source/name)
+   if rate!=1: x=signal.resample_poly(x,100,round(rate*100))
+   x=signal.sosfilt(signal.butter(2,38,'highpass',fs=SR,output='sos'),x)
+   return fades(norm(x),.003,.035)
+  growl=clip('Monster_00.wav');snarl=clip('Monster_01.wav')
+  a=room(clip('Scream_Male_00.wav'),.10);b=room(clip('Scream_Male_01.wav'),.10)
+  hit=room(clip('Bonecrack_00.wav'),.10);loop=clip('Evil_Machine_Loop_00.wav')
+  size=round(.15*SR);ramp=np.linspace(0,1,size)
+  loop=np.r_[loop[-size:]*(1-ramp)+loop[:size]*ramp,loop[size:-size]]
+  clips={
+   'monster_growl':(growl,['Monster_00.wav']),
+   'monster_snarl':(snarl,['Monster_01.wav']),
+   'monster_breath':(room(clip('Breath_Scared_06.wav',.80),.08),['Breath_Scared_06.wav']),
+   'monster_step_a':(room(clip('metal_steps_24.wav',.86),.16),['metal_steps_24.wav']),
+   'monster_step_b':(room(clip('metal_steps_25.wav',.86),.16),['metal_steps_25.wav']),
+   'scream_a':(a,['Scream_Male_00.wav']),
+   'scream_b':(b,['Scream_Male_01.wav']),
+   'impact':(hit,['Bonecrack_00.wav']),
+   'pursuit_loop':(loop,['Evil_Machine_Loop_00.wav']),
+   'capture':(mix([(0,snarl,.66),(.045,hit,.42),(.16,b,.88)]),['Monster_01.wav','Bonecrack_00.wav','Scream_Male_01.wav']),
+   'wake':(clip('Monster_03.wav'),['Monster_03.wav'])}
+  manifest=[]
+  for name,(data,originals) in clips.items():
+   # Linear gain only, without tanh distortion or flattened voice dynamics.
+   data=norm(data,.78 if name=='pursuit_loop' else .82)
+   wav=source/(name+'.wav');mp3=OUT/(name+'.mp3')
+   wavfile.write(wav,SR,(data*32767).astype(np.int16))
+   subprocess.run(['ffmpeg','-v','error','-y','-i',str(wav),'-c:a','libmp3lame','-b:a','128k','-ar',str(SR),'-map_metadata','-1',str(mp3)],check=True)
+   pcm=decode(mp3);peak=float(max(abs(pcm)));rms=float(np.sqrt(np.mean(pcm**2)))
+   assert np.isfinite(pcm).all() and peak<.98 and rms>.015,name
+   manifest.append({'name':name,'seconds':round(len(pcm)/SR,3),'bytes':mp3.stat().st_size,'peak':round(peak,4),'rms':round(rms,4),'sourceFiles':originals,'sha256':hashlib.sha256(mp3.read_bytes()).hexdigest()})
+  (OUT/'manifest.json').write_text(json.dumps({'version':'20261112-recorded2','sampleRate':SR,'bitrate':128000,'origin':'Licensed game-ready recordings and sound design; see CREDITS.md.','credits':'credits.html','sources':[{'archive':n,'url':u,'sha256':s} for n,u,s in SOURCES],'clips':manifest},indent=2)+'\n')
+  print(json.dumps(manifest,indent=2));print('TOTAL BYTES',sum(x['bytes'] for x in manifest))
+if __name__=='__main__': main()

@@ -1,4 +1,4 @@
-// 공포 사운드 — 오리지널 음원 + Web Audio 공간 믹싱, 합성음 예비 경로
+// 공포 사운드 — 허가된 녹음 음원 + Web Audio 공간 믹싱, 합성음 예비 경로
 window.Horror = (function () {
   let ctx = null, master = null, started = false;
   let drone = null, droneGain = null, hbTimer = null, hbRate = 55, hbGain = null;
@@ -37,8 +37,8 @@ window.Horror = (function () {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       ctx.onstatechange = notify;
       master = ctx.createGain(); master.gain.value = muted ? 0 : vol; if (ctx.createDynamicsCompressor) {
-        const limiter = ctx.createDynamicsCompressor(); limiter.threshold.value = -10; limiter.knee.value = 12;
-        limiter.ratio.value = 8; limiter.attack.value = .003; limiter.release.value = .22;
+        const limiter = ctx.createDynamicsCompressor(); limiter.threshold.value = -4; limiter.knee.value = 6;
+        limiter.ratio.value = 12; limiter.attack.value = .003; limiter.release.value = .15;
         master.connect(limiter); limiter.connect(ctx.destination);
       } else master.connect(ctx.destination);
       if (window.SoundBank) SoundBank.attach(ctx, master);
@@ -103,7 +103,7 @@ window.Horror = (function () {
 
   // 낮게 울리는 배경 드론
   function startDrone() {
-    droneGain = ctx.createGain(); droneGain.gain.value = 0.10; droneGain.connect(master);
+    droneGain = ctx.createGain(); droneGain.gain.value = 0.035; droneGain.connect(master);
     const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 180; lp.connect(droneGain);
     [38, 38.7, 57, 76.3].forEach((f, i) => {
       const o = ctx.createOscillator(); o.type = i % 2 ? "sawtooth" : "triangle"; o.frequency.value = f;
@@ -119,7 +119,7 @@ window.Horror = (function () {
   function startRoomTone() {
     const src = ctx.createBufferSource(); src.buffer = noiseBuffer(4); src.loop = true;
     const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 400; bp.Q.value = 0.4;
-    const g = ctx.createGain(); g.gain.value = 0.012;
+    const g = ctx.createGain(); g.gain.value = 0.006;
     src.connect(bp); bp.connect(g); g.connect(master); src.start();
   }
   // 심장박동 — 근접도에 따라 빨라지고 커짐
@@ -147,6 +147,8 @@ window.Horror = (function () {
   }
   function whisper() {
     if (!ctx || ctx.state !== "running") return;
+    // 녹음 음원이 준비되면 실제 괴물의 위치에서만 숨소리를 낸다.
+    if (window.SoundBank && SoundBank.has("monster_breath")) return;
     const t = now(), dur = 1.6 + Math.random() * 1.4;
     const src = ctx.createBufferSource(); src.buffer = noiseBuffer(dur);
     const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 6;
@@ -260,8 +262,8 @@ window.Horror = (function () {
     if (!ctx) return;
     const p = Math.max(0, Math.min(1, 1 - dist / 12));
     proximity = proximity * 0.85 + p * 0.15;
-    hbGain.gain.setTargetAtTime((0.12 + proximity * 0.9) * amb, now(), 0.3);
-    droneGain.gain.setTargetAtTime((0.08 + proximity * 0.22) * amb, now(), 0.5);
+    hbGain.gain.setTargetAtTime((0.045 + proximity * 0.42) * amb, now(), 0.3);
+    droneGain.gain.setTargetAtTime((0.035 + proximity * 0.07) * amb, now(), 0.5);
     drone.frequency.setTargetAtTime(160 + proximity * 500, now(), 0.5);
     stepRate = speed > 0.2 ? Math.min(6, 1.5 + speed * 0.9) : 0;
     stepVol = dist < 14 ? Math.pow(1 - dist / 14, 1.6) * 0.5 * (sees ? 1 : 0.55) : 0;
@@ -292,7 +294,7 @@ window.Horror = (function () {
     const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 300;
     o.connect(lp); lp.connect(g); g.connect(master); o.start(t + 0.08); o.stop(t + 1.7);
   }
-  // 잡힘: 비명 같은 쇳소리 + 폭발적 잡음
+  // 잡힘: 녹음된 괴물 공격 + 충격 + 사람 비명
   function screech() {
     if (!ctx) return;
     silenceScene();

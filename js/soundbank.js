@@ -1,4 +1,4 @@
-// Original, pre-rendered horror effects. All files are hosted alongside the game.
+// Licensed, recorded horror effects. Sources: audio/CREDITS.md. Hosted with the game.
 window.SoundBank = (function () {
   const names = ['capture','scream_a','scream_b','monster_snarl','monster_step_a','monster_step_b','monster_growl','monster_breath','impact','wake','pursuit_loop'];
   const raw = new Map(), buffers = new Map(), voices = new Set(), emitters = new Map();
@@ -8,7 +8,7 @@ window.SoundBank = (function () {
     const pending = (async () => {
       const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 10000);
       try {
-        const res = await fetch(`audio/${name}.mp3?v=20261112-sfx1`, { signal: abort.signal, cache: 'force-cache' });
+        const res = await fetch(`audio/${name}.mp3?v=20261112-recorded2`, { signal: abort.signal, cache: 'force-cache' });
         if (!res.ok) throw Error('Sound unavailable');
         return await res.arrayBuffer();
       } finally { clearTimeout(timer); }

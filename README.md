@@ -80,10 +80,10 @@
 ## 주의
 어둡고 큰 소리, 갑작스러운 얼굴 장면이 있다. 교사 설정에서 "잡혔을 때 연출"을 **암전만**으로 바꾸면 얼굴은 안 나온다.
 
-외부 라이브러리: MQTT.js, PeerJS (lib/ 폴더에 포함). 괴물·얼굴 그림은 img/ 폴더(교사 제공). 주요 공포 음향은 audio/ 폴더의 오리지널 합성 음원 11종이며, 나머지 소리는 Web Audio로 생성한다. 외부 녹음이나 타인의 목소리를 사용하지 않는다.
+외부 라이브러리: MQTT.js, PeerJS (lib/ 폴더에 포함). 괴물·얼굴 그림은 img/ 폴더(교사 제공). 주요 공포 음향은 Little Robot Sound Factory의 **Horror Sound Effects Library**(CC BY 3.0)와 Thimras의 **Metal footsteps on concrete**(CC0)에서 편집한 11종이다. 제작자·원본·라이선스·편집 내역은 [음원 출처](audio/CREDITS.md) 및 게임 설정의 출처 페이지에 명시한다. 나머지 UI·설비 소리와 낮은 배경음은 Web Audio로 생성한다.
 
 ### 공포 음향
 
 괴물 울음·숨소리·발걸음 2종, 연구원 비명 2종, 충격, 추격 긴장음, 출현, 잡힘 음원을 포함한다. 괴물 둘의 거리·좌우 방향을 각각 반영하고 벽 너머 소리는 감쇠한다. 연구원 비명은 인트로의 피격 시점에 맞춘다. **설정 → 효과음 미리듣기**에서 확인할 수 있다. 기존 전체 음량·음소거·소리 복구도 적용된다.
 
-`python scripts/build_sounds.py`로 다시 생성한다(NumPy, SciPy, ffmpeg 필요). 용량은 합계 약 300 KiB이며, 파일 로딩 실패 시 기존 합성 효과음으로 이어진다.
+`python scripts/build_sounds.py`로 원본 다운로드·검증 후 다시 편집한다(NumPy, SciPy, ffmpeg, libarchive 필요). 원본은 `.openai/audio-sources/`에만 캐시하며 배포할 필요가 없다. 재생 파일은 44.1 kHz / 128 kbps MP3이고, 최종 용량과 원본 매핑·SHA-256은 `audio/manifest.json`에 기록한다. 게임은 모든 음원을 자체 호스팅하며 파일 로딩 실패 시 기존 합성 효과음으로 이어진다. 녹음 음원이 들리도록 배경 드론·심장박동을 낮추고, 음원 자체에는 강한 왜곡을 적용하지 않는다.

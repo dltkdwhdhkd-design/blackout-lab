@@ -1,72 +1,144 @@
 {
-  "sampleRate": 32000,
-  "origin": "Original synthesized sound design; no third-party recordings.",
+  "version": "20261112-recorded2",
+  "sampleRate": 44100,
+  "bitrate": 128000,
+  "origin": "Licensed game-ready recordings and sound design; see CREDITS.md.",
+  "credits": "credits.html",
+  "sources": [
+    {
+      "archive": "horror.zip",
+      "url": "https://opengameart.org/sites/default/files/Horror%20Sound%20Library.zip",
+      "sha256": "b14cdd3403013696a7dc85ed0f782aa3359a731aacb017c15d7cd9544f98fb31"
+    },
+    {
+      "archive": "metal_steps.7z",
+      "url": "https://opengameart.org/sites/default/files/metal_steps_48k24b.7z",
+      "sha256": "3df6f81f669dd2f5bf83b8dab46cd0942bd86e7d33cc4409f1ba8470a9df488d"
+    }
+  ],
   "clips": [
     {
       "name": "monster_growl",
-      "seconds": 3.35,
-      "bytes": 34604,
-      "peak": 0.7863
+      "seconds": 3.125,
+      "bytes": 51034,
+      "peak": 0.7804,
+      "rms": 0.1118,
+      "sourceFiles": [
+        "Monster_00.wav"
+      ],
+      "sha256": "d2b6b92973e08840d99795737ca9216285675a8c5f14cab3cff59af52c16b518"
     },
     {
       "name": "monster_snarl",
-      "seconds": 1.55,
-      "bytes": 16604,
-      "peak": 0.7851
+      "seconds": 1.479,
+      "bytes": 24702,
+      "peak": 0.8102,
+      "rms": 0.1172,
+      "sourceFiles": [
+        "Monster_01.wav"
+      ],
+      "sha256": "3603e74fcf35104e8857743ea5f387f9ef43759813e063ba0a9bf813777f881f"
     },
     {
       "name": "monster_breath",
-      "seconds": 3.85,
-      "bytes": 39284,
-      "peak": 0.7865
+      "seconds": 2.497,
+      "bytes": 41003,
+      "peak": 0.7766,
+      "rms": 0.0861,
+      "sourceFiles": [
+        "Breath_Scared_06.wav"
+      ],
+      "sha256": "c65b9163f0811c8d856152754682cf902a8020b31e9c5525abfc28b518329fe8"
     },
     {
       "name": "monster_step_a",
-      "seconds": 0.97,
-      "bytes": 10484,
-      "peak": 0.7744
+      "seconds": 0.534,
+      "bytes": 9656,
+      "peak": 0.7802,
+      "rms": 0.0335,
+      "sourceFiles": [
+        "metal_steps_24.wav"
+      ],
+      "sha256": "11fb400cef88aba0081c1f5da6dd2179232f72b3b48172b4af7a580c365dd0cb"
     },
     {
       "name": "monster_step_b",
-      "seconds": 0.97,
-      "bytes": 10484,
-      "peak": 0.7806
+      "seconds": 0.59,
+      "bytes": 10492,
+      "peak": 0.7775,
+      "rms": 0.0273,
+      "sourceFiles": [
+        "metal_steps_25.wav"
+      ],
+      "sha256": "5c4d1d3f5c2923f2469ec2b1d56b09ae6aef4b0768055a9f14caad157b954834"
     },
     {
       "name": "scream_a",
-      "seconds": 2.0,
-      "bytes": 20924,
-      "peak": 0.7653
+      "seconds": 2.589,
+      "bytes": 42674,
+      "peak": 0.7822,
+      "rms": 0.1763,
+      "sourceFiles": [
+        "Scream_Male_00.wav"
+      ],
+      "sha256": "e6ec183d7b3fc8c766223dac40e0a74c71d3dad4ea2df72e3b21ccc2cad27d2d"
     },
     {
       "name": "scream_b",
-      "seconds": 2.2,
-      "bytes": 23084,
-      "peak": 0.7677
+      "seconds": 2.102,
+      "bytes": 34733,
+      "peak": 0.7727,
+      "rms": 0.1913,
+      "sourceFiles": [
+        "Scream_Male_01.wav"
+      ],
+      "sha256": "cf202959d5d6575741efc8015e2bf992a4c790fde6bf08a8d0e08f703d22156b"
     },
     {
       "name": "impact",
-      "seconds": 1.8,
-      "bytes": 18764,
-      "peak": 0.8293
+      "seconds": 0.981,
+      "bytes": 16761,
+      "peak": 0.7711,
+      "rms": 0.0242,
+      "sourceFiles": [
+        "Bonecrack_00.wav"
+      ],
+      "sha256": "0913e62fc4a188d460cab6ef67cb7edab4bbc96b491daa88d4e4df05bcbfbc2e"
     },
     {
       "name": "pursuit_loop",
-      "seconds": 6.0,
-      "bytes": 60884,
-      "peak": 0.7797
+      "seconds": 9.493,
+      "bytes": 153016,
+      "peak": 0.7441,
+      "rms": 0.0946,
+      "sourceFiles": [
+        "Evil_Machine_Loop_00.wav"
+      ],
+      "sha256": "95c98898d44d034051542bc22332f9a3e9d121ba5393d2cae49d972eeb12ca8b"
     },
     {
       "name": "capture",
-      "seconds": 3.6,
-      "bytes": 36764,
-      "peak": 0.7743
+      "seconds": 2.262,
+      "bytes": 37241,
+      "peak": 0.7781,
+      "rms": 0.1608,
+      "sourceFiles": [
+        "Monster_01.wav",
+        "Bonecrack_00.wav",
+        "Scream_Male_01.wav"
+      ],
+      "sha256": "8d12af0fab5e4be550fdb276b624f541292c0103ce15811838232aba6105679a"
     },
     {
       "name": "wake",
-      "seconds": 3.4,
-      "bytes": 34964,
-      "peak": 0.7775
+      "seconds": 3.208,
+      "bytes": 52287,
+      "peak": 0.771,
+      "rms": 0.3018,
+      "sourceFiles": [
+        "Monster_03.wav"
+      ],
+      "sha256": "1f9874ec1ecd2d9ca3b6d5d9cae0078efc3e395dd61abbc2c7343e3fa348ed68"
     }
   ]
 }
