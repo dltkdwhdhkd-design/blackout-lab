@@ -10,8 +10,9 @@ window.Horror = (function () {
     if (started) return;
     started = true;
     ctx = new (window.AudioContext || window.webkitAudioContext)();
-    master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination);
+    master = ctx.createGain(); master.gain.value = muted ? 0 : vol; master.connect(ctx.destination);
     startDrone(); startHeartbeat(); startWhispers(); startSteps(); startRoomTone();
+    if (window.Options) Options.apply();
   }
   function resume() { if (ctx && ctx.state === "suspended") ctx.resume(); }
   function now() { return ctx.currentTime; }
@@ -107,8 +108,8 @@ window.Horror = (function () {
     if (!ctx) return;
     const p = Math.max(0, Math.min(1, 1 - dist / 12));
     proximity = proximity * 0.85 + p * 0.15;
-    hbGain.gain.setTargetAtTime(0.12 + proximity * 0.9, now(), 0.3);
-    droneGain.gain.setTargetAtTime(0.08 + proximity * 0.22, now(), 0.5);
+    hbGain.gain.setTargetAtTime((0.12 + proximity * 0.9) * amb, now(), 0.3);
+    droneGain.gain.setTargetAtTime((0.08 + proximity * 0.22) * amb, now(), 0.5);
     drone.frequency.setTargetAtTime(160 + proximity * 500, now(), 0.5);
     stepRate = speed > 0.2 ? Math.min(6, 1.5 + speed * 0.9) : 0;
     stepVol = dist < 14 ? Math.pow(1 - dist / 14, 1.6) * 0.5 * (sees ? 1 : 0.55) : 0;
@@ -235,7 +236,10 @@ window.Horror = (function () {
     const hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 1500;
     src.connect(hp); hp.connect(g); g.connect(master); src.start(t);
   }
-  function setMuted(m) { muted = m; if (master) master.gain.setTargetAtTime(m ? 0 : 0.9, now(), 0.05); }
-  function vibrate(p) { try { if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
-  return { init, resume, update, wrong, right, screech, scrape, bang, breath, lightsOn, whisper, siren, shatter, spark, click, setMuted, vibrate, get ready() { return !!ctx; } };
+  let vol = 0.9, amb = 1;
+  function setMuted(m) { muted = m; if (master) master.gain.setTargetAtTime(m ? 0 : vol, now(), 0.05); }
+  function setVolume(x) { vol = Math.max(0, Math.min(1, x)); if (master && !muted) master.gain.setTargetAtTime(vol, now(), 0.05); }
+  function setAmbient(x) { amb = Math.max(0, Math.min(1, x)); }
+  function vibrate(p) { try { if (window.Options && !Options.get("vib")) return; if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
+  return { init, resume, update, wrong, right, screech, scrape, bang, breath, lightsOn, whisper, siren, shatter, spark, click, setMuted, setVolume, setAmbient, vibrate, get ready() { return !!ctx; } };
 })();

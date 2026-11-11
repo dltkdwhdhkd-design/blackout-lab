@@ -2,7 +2,9 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
 <title>BLACKOUT LAB — 정전</title>
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -18,6 +20,7 @@
       <button id="btn-teacher" class="big">교사 · 방 만들기</button>
       <button id="btn-student" class="big primary">학생 · 참가하기</button>
       <button id="btn-solo">혼자 연습</button>
+      <button id="btn-options-title" class="ghost">⚙ 설정 (소리 · 감도)</button>
     </div>
     <p class="muted small">공개 중계 서버를 지나므로 실명 대신 별명을 쓰세요.</p>
   </div>
@@ -67,7 +70,7 @@
     <div id="hud-top">
       <span id="hud-time">12:00</span>
       <span id="hud-fuse">부품 0/7</span>
-      <span><button id="btn-map">지도</button> <button id="btn-mute">🔊</button></span>
+      <span><button id="btn-map">지도</button> <button id="btn-mute">🔊</button> <button id="btn-options">⚙</button></span>
     </div>
     <div id="hud-noise-wrap"><div id="hud-noise"></div></div>
     <div id="hud-safe"></div>
@@ -87,6 +90,25 @@
     </div>
   </div>
 </section>
+
+<!-- 설정 -->
+<div id="options" style="display:none">
+  <div class="panel opt-box">
+    <h2>설정</h2>
+    <p class="muted small">이 기기에 저장됩니다. 게임 중에도 바꿀 수 있지만 그동안 캐릭터는 멈춰 있습니다.</p>
+    <label class="opt">전체 음량 <input id="opt-vol" type="range" min="0" max="1" step="0.05"> <span id="opt-vol-v"></span></label>
+    <label class="opt">배경음 (웅웅거림 · 심장박동) <input id="opt-amb" type="range" min="0" max="1" step="0.05"> <span id="opt-amb-v"></span></label>
+    <label class="opt">마우스 감도 <input id="opt-mouse" type="range" min="0.2" max="3" step="0.1"> <span id="opt-mouse-v"></span></label>
+    <label class="opt">터치 회전 감도 (폰 · 패드) <input id="opt-touch" type="range" min="0.2" max="3" step="0.1"> <span id="opt-touch-v"></span></label>
+    <label class="opt check"><input id="opt-invert" type="checkbox"> 마우스 위아래 반전</label>
+    <label class="opt check"><input id="opt-vib" type="checkbox"> 진동 (폰)</label>
+    <div class="row">
+      <button id="opt-test">소리 시험</button>
+      <button id="opt-reset" class="ghost">기본값</button>
+      <button id="opt-close" class="primary">닫기</button>
+    </div>
+  </div>
+</div>
 
 <!-- 교사 관제 -->
 <section id="s-host-console" class="screen" style="display:none">
@@ -114,6 +136,7 @@
 <script src="js/map.js"></script>
 <script src="js/net.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/options.js"></script>
 <script src="js/assets.js"></script>
 <script src="js/fps.js"></script>
 <script src="js/sim.js"></script>

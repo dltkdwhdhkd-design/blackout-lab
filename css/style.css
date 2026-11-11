@@ -1,5 +1,9 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html, body { margin: 0; height: 100%; background: #000; color: #d8d4cc; font-family: "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; overscroll-behavior: none; }
+html, body { margin: 0; height: 100%; background: #000; color: #d8d4cc; font-family: "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; overscroll-behavior: none;
+  touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+button, .screen { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+#s-game, #s-game * { touch-action: none; }
+
 body { overflow: hidden; }
 .screen { position: fixed; inset: 0; overflow: auto; }
 .center { display: flex; align-items: center; justify-content: center; }
@@ -43,7 +47,7 @@ input, select { font: inherit; background: #0d0e11; color: #eee; border: 1px sol
 #hud-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 #hud-time { font-family: ui-monospace, monospace; font-size: 1.3rem; color: #ff5a5a; text-shadow: 0 0 8px rgba(255,0,0,0.6); }
 #hud-fuse { color: #ddd; }
-#btn-mute, #btn-map { pointer-events: auto; padding: 4px 8px; background: rgba(0,0,0,0.5); }
+#btn-mute, #btn-map, #btn-options { pointer-events: auto; padding: 4px 8px; background: rgba(0,0,0,0.5); }
 #lock-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.6); color: #cfc8bc; font-size: 0.85rem; pointer-events: none; white-space: nowrap; display: none; }
 #hud-noise-wrap { height: 4px; background: rgba(255,255,255,0.08); margin-top: 6px; border-radius: 2px; overflow: hidden; }
 #hud-noise { height: 100%; width: 0; background: linear-gradient(90deg, #5a0000, #ff2020); transition: width 0.3s; }
@@ -65,6 +69,16 @@ input, select { font: inherit; background: #0d0e11; color: #eee; border: 1px sol
 #modal-choices button.wrong { background: #3a1010; border-color: #ff4a4a; }
 #modal-exp { margin: 12px 0 6px; color: #c8bfae; font-size: 0.95rem; min-height: 1.2em; }
 
+/* 설정 */
+#options { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.75); padding: 12px; }
+.opt-box { width: min(94vw, 480px); max-height: 92vh; overflow: auto; margin: 0; }
+.opt-box h2 { margin: 0 0 4px; }
+label.opt { display: grid; grid-template-columns: 1fr 64px; align-items: center; gap: 4px 10px; margin: 14px 0; font-size: 0.95rem; }
+label.opt input[type=range] { grid-column: 1 / 2; width: 100%; margin: 0; padding: 0; height: 28px; }
+label.opt span { grid-column: 2; grid-row: 2; text-align: right; color: #ffd27e; font-family: ui-monospace, monospace; }
+label.opt.check { display: flex; gap: 10px; }
+label.opt.check input { width: 22px; height: 22px; margin: 0; }
+
 /* 관제 */
 #console-top { position: absolute; top: 0; left: 0; right: 0; height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; background: #0b0c0f; border-bottom: 1px solid #23242b; }
 #host-canvas { position: absolute; top: 44px; left: 0; right: 300px; bottom: 0; width: calc(100% - 300px); height: calc(100% - 44px); display: block; }
@@ -79,3 +93,7 @@ input, select { font: inherit; background: #0d0e11; color: #eee; border: 1px sol
 .results th { color: #8f8a82; font-weight: 600; }
 .results td.bad { color: #ff7a7a; }
 .res-team { margin-bottom: 20px; }
+
+/* iOS: 입력칸 글자가 16px보다 작으면 누를 때 자동 확대된다 — 맨 끝에서 강제 */
+input, select, textarea { font-size: 16px !important; }
+input[type=range], input[type=checkbox] { accent-color: #b52222; }

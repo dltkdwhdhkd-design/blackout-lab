@@ -53,7 +53,7 @@ window.Client = (function () {
       if (k === " " || k === "e") { e.preventDefault(); interactPress(); }
       if ((k === "m" || k === "tab") && !e.repeat) { e.preventDefault(); if (!intro && !modal) mapOpen = !mapOpen; }
       if (k === "f" && !e.repeat) toggleLight();
-      if (e.key === "Escape") { if (modal) cancelModal(); mapOpen = false; }
+      if (e.key === "Escape") { if (modal) cancelModal(); mapOpen = false; if (Options.isOpen) Options.close(); }
     };
     window.onkeyup = e => { keys[e.key.toLowerCase()] = false; if (e.key === " " || e.key.toLowerCase() === "e") interactRelease(); };
     const stick = el("stick"), knob = el("stick-knob"), zone = el("touch-zone");
@@ -71,7 +71,7 @@ window.Client = (function () {
           if (d > 0) { dx = dx / d * m; dy = dy / d * m; }
           knob.style.transform = `translate(${dx}px,${dy}px)`;
           input.fwd = d > 8 ? -dy / 50 : 0; input.strafe = d > 8 ? dx / 50 : 0;
-        } else if (t.identifier === tid && !intro && !mapOpen) { const dx = t.clientX - tx; tx = t.clientX; pos.a += dx * 0.0075; }
+        } else if (t.identifier === tid && !intro && !mapOpen && !Options.isOpen) { const dx = t.clientX - tx; tx = t.clientX; pos.a += dx * 0.0075 * Options.get("touchSens"); }
       }
     }, { passive: true });
     const endT = e => { for (const t of e.changedTouches) { if (t.identifier === sid) { sid = null; input.fwd = input.strafe = 0; stick.style.display = "none"; knob.style.transform = ""; } if (t.identifier === tid) tid = null; } };
@@ -80,7 +80,7 @@ window.Client = (function () {
     zone.addEventListener("pointerdown", e => {
       if (e.pointerType !== "mouse") return;
       if (!locked) {
-        if (!modal && zone.requestPointerLock) { try { const r = zone.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (err) {} }
+        if (!modal && !Options.isOpen && zone.requestPointerLock) { try { const r = zone.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (err) {} }
         return;
       }
       if (e.button === 0) interactPress();
@@ -91,9 +91,10 @@ window.Client = (function () {
     zone.addEventListener("pointerup", e => { if (e.pointerType === "mouse" && locked) interactRelease(); });
     document.addEventListener("pointerlockchange", () => { locked = document.pointerLockElement === zone; });
     document.addEventListener("mousemove", e => {
-      if (!locked || !running || intro || modal || mapOpen) return;
-      pos.a += (e.movementX || 0) * 0.0024;
-      look = Math.max(-0.28, Math.min(0.28, look - (e.movementY || 0) * 0.0015));
+      if (!locked || !running || intro || modal || mapOpen || Options.isOpen) return;
+      const k = Options.get("mouseSens");
+      pos.a += (e.movementX || 0) * 0.0024 * k;
+      look = Math.max(-0.28, Math.min(0.28, look - (e.movementY || 0) * 0.0015 * k * (Options.get("invertY") ? -1 : 1)));
     });
     el("btn-map").onclick = () => { if (!intro && !modal) mapOpen = !mapOpen; };
     const btn = el("btn-act");
@@ -112,7 +113,7 @@ window.Client = (function () {
     return null;
   }
   function interactPress() {
-    if (!running || down || escaped || modal || intro || mapOpen || phase !== "play") return;
+    if (!running || down || escaped || modal || intro || mapOpen || Options.isOpen || phase !== "play") return;
     const n = nearest(); if (!n) return;
     if (n.kind === "fuse") Net.sendToHost({ t: "q", fuse: n.fuse.id });
     else if (n.kind === "breaker") Net.sendToHost({ t: "q", fuse: -1 });
@@ -305,7 +306,7 @@ window.Client = (function () {
     if (keys["w"] || keys["arrowup"]) fwd += 1; if (keys["s"] || keys["arrowdown"]) fwd -= 1;
     if (keys["a"]) strafe -= 1; if (keys["d"]) strafe += 1;
     if (keys["arrowleft"] || keys["q"]) turn -= 1; if (keys["arrowright"]) turn += 1;
-    const canMove = !down && !escaped && !hidden && !modal && !mapOpen && phase === "play";
+    const canMove = !down && !escaped && !hidden && !modal && !mapOpen && !Options.isOpen && phase === "play";
     moving = false;
     if (canMove) {
       pos.a += turn * 2.4 * dt;
@@ -352,7 +353,7 @@ window.Client = (function () {
       el("hud-team").innerHTML = S.p.map((p, i) => `<span class="${p[4] ? 'dn' : ''} ${p[6] ? 'esc' : ''}" style="color:${colors[i % colors.length]}">${p[6] ? "✓" : p[4] ? "✕" : "●"} ${names[p[0]] || "?"}</span>`).join(" ");
     }
     el("btn-light").classList.toggle("on", lightOn);
-    el("lock-hint").style.display = (!isTouch && !locked && !modal && !mapOpen && !escaped && !intro && !down && phase === "play") ? "block" : "none";
+    el("lock-hint").style.display = (!isTouch && !locked && !modal && !mapOpen && !Options.isOpen && !escaped && !intro && !down && phase === "play") ? "block" : "none";
     el("toast").style.visibility = mapOpen ? "hidden" : "";
     el("toast").textContent = toast.t > 0 ? toast.text : "";
     el("toast").style.opacity = toast.t > 0 ? Math.min(1, toast.t) : 0;

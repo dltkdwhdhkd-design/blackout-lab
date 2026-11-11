@@ -182,6 +182,19 @@
       show("end");
     }, 2500);
   }
+  $("btn-options-title").onclick = () => Options.show();
+  $("btn-options").onclick = () => Options.show();
+  $("btn-options").addEventListener("pointerdown", e => e.stopPropagation());
+
+  // 패드·폰: 두 번 탭 확대, 두 손가락 확대, 길게 눌러 확대경·메뉴 막기 (이동하면서 시점 돌리면 손가락 둘을 쓰므로 필수)
+  const isField = t => t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName);
+  for (const ev of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+  document.addEventListener("dblclick", e => e.preventDefault(), { passive: false });
+  document.addEventListener("touchmove", e => { if (e.touches.length > 1 || (e.scale !== undefined && e.scale !== 1)) e.preventDefault(); }, { passive: false });
+  let lastTouchEnd = 0;
+  document.addEventListener("touchend", e => { const t = Date.now(); if (t - lastTouchEnd < 350 && !isField(e.target)) e.preventDefault(); lastTouchEnd = t; }, { passive: false });
+  document.addEventListener("contextmenu", e => { if (!isField(e.target)) e.preventDefault(); });
+
   $("btn-mute").onclick = () => { const m = $("btn-mute").classList.toggle("muted"); Horror.setMuted(m); $("btn-mute").textContent = m ? "🔇" : "🔊"; };
 
   // 모달 취소

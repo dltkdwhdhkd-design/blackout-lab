@@ -1,0 +1,31 @@
+// 설정: 소리, 감도, 진동 — 이 기기 브라우저에 저장
+window.Options = (function () {
+  const DEF = { vol: 0.9, amb: 1.0, mouseSens: 1.0, touchSens: 1.0, invertY: false, vib: true };
+  const KEY = "blackoutlab.options.v1";
+  let v = { ...DEF }, open = false, onClose = null;
+  try { const s = JSON.parse(localStorage.getItem(KEY) || "{}"); for (const k in DEF) if (k in s) v[k] = s[k]; } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
+  function get(k) { return v[k]; }
+  function apply() { if (window.Horror) { Horror.setVolume(v.vol); Horror.setAmbient(v.amb); } }
+  const $ = id => document.getElementById(id);
+  function bind() {
+    const sliders = [["opt-vol", "vol", x => Math.round(x * 100) + "%"], ["opt-amb", "amb", x => Math.round(x * 100) + "%"],
+      ["opt-mouse", "mouseSens", x => x.toFixed(1) + "×"], ["opt-touch", "touchSens", x => x.toFixed(1) + "×"]];
+    for (const [id, k, fmt] of sliders) {
+      const el = $(id); el.value = v[k]; $(id + "-v").textContent = fmt(v[k]);
+      el.oninput = () => { v[k] = +el.value; $(id + "-v").textContent = fmt(v[k]); apply(); save(); };
+    }
+    $("opt-invert").checked = v.invertY; $("opt-invert").onchange = () => { v.invertY = $("opt-invert").checked; save(); };
+    $("opt-vib").checked = v.vib; $("opt-vib").onchange = () => { v.vib = $("opt-vib").checked; save(); if (v.vib) Horror.vibrate(60); };
+    $("opt-test").onclick = () => { if (window.Horror) { Horror.init(); Horror.resume(); apply(); Horror.scrape(); } };
+    $("opt-reset").onclick = () => { v = { ...DEF }; save(); bind(); apply(); };
+    $("opt-close").onclick = close;
+  }
+  function show(cb) {
+    onClose = cb || null; open = true;
+    if (document.pointerLockElement) document.exitPointerLock();
+    bind(); $("options").style.display = "flex";
+  }
+  function close() { open = false; $("options").style.display = "none"; if (onClose) onClose(); }
+  return { get, apply, show, close, get isOpen() { return open; } };
+})();
