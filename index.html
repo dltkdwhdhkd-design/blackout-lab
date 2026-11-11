@@ -63,6 +63,8 @@
     <button id="btn-join" class="primary big">입장</button>
     <button id="btn-join-cancel" class="ghost" style="display:none">취소 · 다시 입력</button>
     <p id="join-msg" class="muted"></p>
+    <button id="btn-lobby-audio">🔊 소리 켜기 · 시험</button>
+    <p id="lobby-audio-status" class="muted small" role="status">입장 전에 소리가 들리는지 확인해 주세요.</p>
   </div>
 </section>
 
@@ -115,6 +117,7 @@
   <div class="panel opt-box">
     <h2>설정</h2>
     <p class="muted small">이 기기에 저장됩니다. 게임 중에도 바꿀 수 있지만 그동안 캐릭터는 멈춰 있습니다.</p>
+    <p id="opt-audio-status" class="small" role="status"></p>
     <label class="opt">전체 음량 <input id="opt-vol" type="range" min="0" max="1" step="0.05"> <span id="opt-vol-v"></span></label>
     <label class="opt">배경음 (웅웅거림 · 심장박동) <input id="opt-amb" type="range" min="0" max="1" step="0.05"> <span id="opt-amb-v"></span></label>
     <label class="opt">마우스 감도 <input id="opt-mouse" type="range" min="0.2" max="3" step="0.1"> <span id="opt-mouse-v"></span></label>
@@ -122,10 +125,12 @@
     <label class="opt check"><input id="opt-invert" type="checkbox"> 마우스 위아래 반전</label>
     <label class="opt check"><input id="opt-vib" type="checkbox"> 진동 (폰)</label>
     <div class="row">
-      <button id="opt-test">소리 시험</button>
+      <button id="opt-test">소리 켜기 · 시험</button>
+      <button id="opt-repair">소리 복구</button>
       <button id="opt-reset" class="ghost">기본값</button>
       <button id="opt-close" class="primary">닫기</button>
     </div>
+    <p class="muted small">시험음도 들리지 않으면 기기 음량·무음 모드·블루투스 출력을 확인해 주세요. 계속 조용하면 ‘소리 복구’를 눌러 주세요.</p>
   </div>
 </div>
 
@@ -158,8 +163,8 @@
 <script src="js/mapgen.js"></script>
 <script src="js/floors.js?v=20261111-floors1"></script>
 <script src="js/net.js?v=20261111-floors1"></script>
-<script src="js/audio.js"></script>
-<script src="js/options.js"></script>
+<script src="js/audio.js?v=20261111-audio1"></script>
+<script src="js/options.js?v=20261111-audio1"></script>
 <script src="js/propart.js"></script>
 <script src="js/assets.js"></script>
 <script src="js/fps.js?v=20261111-floors1"></script>
@@ -167,6 +172,6 @@
 <script src="js/sim.js?v=20261111-floors1"></script>
 <script src="js/client.js?v=20261111-floors1"></script>
 <script src="js/host.js?v=20261111-floors1"></script>
-<script src="js/main.js?v=20261111-floors1"></script>
+<script src="js/main.js?v=20261111-audio1"></script>
 </body>
 </html>

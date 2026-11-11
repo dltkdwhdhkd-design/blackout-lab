@@ -7,6 +7,15 @@ window.Options = (function () {
   function save() { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
   function get(k) { return v[k]; }
   function apply() { if (window.Horror) { Horror.setVolume(v.vol); Horror.setAmbient(v.amb); } }
+  function enableSound(repair = false) {
+    if (!window.Horror) return;
+    if (!(v.vol > 0)) { v.vol = DEF.vol; save(); }
+    Horror.setMuted(false); apply();
+    if (repair) Horror.restart();
+    const result = Horror.testTone();
+    if (open) bind();
+    return result;
+  }
   const $ = id => document.getElementById(id);
   function bind() {
     const sliders = [["opt-vol", "vol", x => Math.round(x * 100) + "%"], ["opt-amb", "amb", x => Math.round(x * 100) + "%"],
@@ -17,7 +26,8 @@ window.Options = (function () {
     }
     $("opt-invert").checked = v.invertY; $("opt-invert").onchange = () => { v.invertY = $("opt-invert").checked; save(); };
     $("opt-vib").checked = v.vib; $("opt-vib").onchange = () => { v.vib = $("opt-vib").checked; save(); if (v.vib) Horror.vibrate(60); };
-    $("opt-test").onclick = () => { if (window.Horror) { Horror.init(); Horror.resume(); apply(); Horror.scrape(); } };
+    $("opt-test").onclick = () => enableSound();
+    $("opt-repair").onclick = () => enableSound(true);
     $("opt-reset").onclick = () => { v = { ...DEF }; save(); bind(); apply(); };
     $("opt-close").onclick = close;
   }
@@ -27,5 +37,5 @@ window.Options = (function () {
     bind(); $("options").style.display = "flex";
   }
   function close() { open = false; $("options").style.display = "none"; if (onClose) onClose(); }
-  return { get, apply, show, close, get isOpen() { return open; } };
+  return { get, apply, show, close, enableSound, get isOpen() { return open; } };
 })();

@@ -5,16 +5,85 @@ window.Horror = (function () {
   let proximity = 0; // 0~1 괴물 근접도
   let whisperTimer = null, stepTimer = null, stepRate = 0, stepVol = 0, stepPan = 0;
   let muted = false;
+  let wanted = false, failed = false;
+  const listeners = new Set();
+
+  function status() { return { state: failed ? "error" : (ctx ? ctx.state : "idle"), muted, volume: vol }; }
+  function notify() { const s = status(); for (const fn of listeners) fn(s); }
+  function onStatus(fn) { listeners.add(fn); fn(status()); return () => listeners.delete(fn); }
+  function dispose() {
+    clearTimeout(hbTimer); clearTimeout(whisperTimer); clearTimeout(stepTimer);
+    hbTimer = whisperTimer = stepTimer = null;
+    const old = ctx;
+    ctx = null; started = false; sirenNodes = null;
+    if (old) {
+      old.onstatechange = null;
+      try { if (master) master.disconnect(); } catch (e) {}
+      try { Promise.resolve(old.close()).catch(() => {}); } catch (e) {}
+    }
+    master = drone = droneGain = hbGain = null;
+  }
 
   function init() {
-    if (started) return;
-    started = true;
-    ctx = new (window.AudioContext || window.webkitAudioContext)();
-    master = ctx.createGain(); master.gain.value = muted ? 0 : vol; master.connect(ctx.destination);
-    startDrone(); startHeartbeat(); startWhispers(); startSteps(); startRoomTone();
-    if (window.Options) Options.apply();
+    wanted = true;
+    if (started && ctx.state !== "closed") return resume();
+    if (ctx) dispose();
+    try {
+      // 지원하는 Safari에서는 게임 음향을 미디어 재생으로 등록한다.
+      try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      ctx.onstatechange = notify;
+      master = ctx.createGain(); master.gain.value = muted ? 0 : vol; master.connect(ctx.destination);
+      startDrone(); startHeartbeat(); startWhispers(); startSteps(); startRoomTone();
+      started = true; failed = false;
+      if (window.Options) Options.apply();
+      // 입장 버튼을 누른 바로 그 이벤트 안에서 재생을 요청한다.
+      return resume();
+    } catch (e) {
+      dispose(); failed = true; notify(); return Promise.resolve(false);
+    }
   }
-  function resume() { if (ctx && ctx.state === "suspended") ctx.resume(); }
+  function resume() {
+    if (!ctx) return Promise.resolve(false);
+    if (ctx.state === "closed") return init();
+    const current = ctx;
+    try {
+      // Safari의 interrupted도 suspended와 함께 복구한다.
+      const pending = current.state === "running" ? Promise.resolve() : current.resume();
+      notify();
+      return Promise.resolve(pending).then(() => {
+        if (ctx !== current) return false;
+        notify(); return current.state === "running";
+      }, () => { if (ctx === current) notify(); return false; });
+    } catch (e) { notify(); return Promise.resolve(false); }
+  }
+  function restart() { dispose(); return init(); }
+  function testTone() {
+    const pending = init(), current = ctx;
+    return pending.then(ok => {
+      if (!ok || ctx !== current || muted || vol === 0) return false;
+      const t = now();
+      // 작은 휴대폰 스피커에서도 확인하기 쉬운 두 음. 놀라는 효과음은 쓰지 않는다.
+      [440, 660].forEach((freq, i) => {
+        const o = ctx.createOscillator(), g = ctx.createGain(), at = t + i * 0.24;
+        o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, at); g.gain.linearRampToValueAtTime(0.16, at + 0.025);
+        g.gain.exponentialRampToValueAtTime(0.0001, at + 0.2);
+        o.connect(g); g.connect(master); o.start(at); o.stop(at + 0.22);
+      });
+      return true;
+    });
+  }
+  // 터치 컨트롤의 preventDefault/stopPropagation보다 먼저 재시도한다.
+  function gesture(e) {
+    // 소리 버튼은 자신의 클릭 처리에서 켠다. 이 단계에서 먼저 켜면 클릭이 끄기로 바뀐다.
+    if (e && e.target && e.target.closest && e.target.closest("#btn-mute")) return;
+    if (wanted && (!ctx || ctx.state !== "running")) init();
+  }
+  for (const event of ["pointerdown", "touchend", "click", "keydown"]) document.addEventListener(event, gesture, { capture: true, passive: true });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) gesture(); });
+  window.addEventListener("pageshow", gesture);
+  window.addEventListener("focus", gesture);
   function now() { return ctx.currentTime; }
 
   function noiseBuffer(sec) {
@@ -50,7 +119,7 @@ window.Horror = (function () {
     hbGain = ctx.createGain(); hbGain.gain.value = 0.0; hbGain.connect(master);
     const beat = () => {
       const t = now();
-      thump(t, 0.9); thump(t + 0.18, 0.6);
+      if (ctx.state === "running") { thump(t, 0.9); thump(t + 0.18, 0.6); }
       const bpm = 52 + proximity * 110;
       hbTimer = setTimeout(beat, 60000 / bpm);
     };
@@ -64,7 +133,7 @@ window.Horror = (function () {
   // 속삭임 — 어둠 속에서 드물게
   function startWhispers() {
     const sched = () => {
-      whisperTimer = setTimeout(() => { if (Math.random() < 0.6) whisper(); sched(); }, 9000 + Math.random() * 16000);
+      whisperTimer = setTimeout(() => { if (ctx.state === "running" && Math.random() < 0.6) whisper(); sched(); }, 9000 + Math.random() * 16000);
     };
     sched();
   }
@@ -86,7 +155,7 @@ window.Horror = (function () {
   function startSteps() {
     const tick = () => {
       const interval = stepRate > 0 ? 1000 / stepRate : 600;
-      if (stepRate > 0 && stepVol > 0.001) step();
+      if (ctx.state === "running" && stepRate > 0 && stepVol > 0.001) step();
       stepTimer = setTimeout(tick, interval + (Math.random() - 0.5) * 60);
     };
     tick();
@@ -200,7 +269,7 @@ window.Horror = (function () {
   let sirenNodes = null;
   function siren(on) {
     if (!ctx) return;
-    if (!on) { if (sirenNodes) { const t = now(); sirenNodes.g.gain.setTargetAtTime(0, t, 0.3); setTimeout(() => { try { sirenNodes.o.stop(); } catch (e) {} }, 800); sirenNodes = null; } return; }
+    if (!on) { if (sirenNodes) { const nodes = sirenNodes, t = now(); nodes.g.gain.setTargetAtTime(0, t, 0.3); setTimeout(() => { try { nodes.o.stop(); nodes.lfo.stop(); } catch (e) {} }, 800); sirenNodes = null; } return; }
     if (sirenNodes) return;
     const o = ctx.createOscillator(); o.type = "square"; const g = ctx.createGain(); g.gain.value = 0.0001;
     const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1200;
@@ -237,9 +306,9 @@ window.Horror = (function () {
     src.connect(hp); hp.connect(g); g.connect(master); src.start(t);
   }
   let vol = 0.9, amb = 1;
-  function setMuted(m) { muted = m; if (master) master.gain.setTargetAtTime(m ? 0 : vol, now(), 0.05); }
-  function setVolume(x) { vol = Math.max(0, Math.min(1, x)); if (master && !muted) master.gain.setTargetAtTime(vol, now(), 0.05); }
-  function setAmbient(x) { amb = Math.max(0, Math.min(1, x)); }
+  function setMuted(m) { muted = !!m; if (master) master.gain.setTargetAtTime(muted ? 0 : vol, now(), 0.05); notify(); }
+  function setVolume(x) { vol = Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0.9; if (master && !muted) master.gain.setTargetAtTime(vol, now(), 0.05); notify(); }
+  function setAmbient(x) { amb = Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 1; }
   function vibrate(p) { try { if (window.Options && !Options.get("vib")) return; if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
-  return { init, resume, update, wrong, right, screech, scrape, bang, breath, lightsOn, whisper, siren, shatter, spark, click, setMuted, setVolume, setAmbient, vibrate, get ready() { return !!ctx; } };
+  return { init, resume, restart, testTone, status, onStatus, update, wrong, right, screech, scrape, bang, breath, lightsOn, whisper, siren, shatter, spark, click, setMuted, setVolume, setAmbient, vibrate, get ready() { return started && ctx.state === "running"; } };
 })();

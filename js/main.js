@@ -239,7 +239,7 @@
   document.addEventListener("visibilitychange", () => {
     if (!activeSession || ending) return;
     if (document.hidden) { recovering = true; syncRequest = Net.newId(); Client.setConnectionLost(true); }
-    else { Horror.resume(); recover(); }
+    else recover();
   });
   Net.onStatus(s => {
     const t = s.local ? "" : `연결 ${s.brokers}/3${s.peers ? " · 직접 연결" : ""}`;
@@ -320,7 +320,18 @@
   document.addEventListener("touchend", e => { const t = Date.now(); const btn = e.target && e.target.closest && e.target.closest("button, label, a"); if (t - lastTouchEnd < 350 && !isField(e.target) && !btn) e.preventDefault(); lastTouchEnd = t; }, { passive: false });
   document.addEventListener("contextmenu", e => { if (!isField(e.target)) e.preventDefault(); });
 
-  $("btn-mute").onclick = () => { const m = $("btn-mute").classList.toggle("muted"); Horror.setMuted(m); $("btn-mute").textContent = m ? "🔇" : "🔊"; };
+  $("btn-lobby-audio").onclick = () => Options.enableSound();
+  let muteAction = "enable";
+  $("btn-mute").onclick = () => { if (muteAction === "enable") Options.enableSound(); else Horror.setMuted(true); };
+  Horror.onStatus(s => {
+    const off = s.muted || s.volume === 0, ready = s.state === "running";
+    muteAction = off || !ready ? "enable" : "mute";
+    $("btn-mute").textContent = off ? "🔇 켜기" : ready ? "🔊" : "🔈 켜기";
+    $("btn-mute").title = muteAction === "enable" ? "소리 켜기 · 시험" : "소리 끄기";
+    const message = off ? "게임 소리가 꺼져 있습니다. 소리 켜기를 눌러 주세요." : ready ? "소리 재생 준비됨 · 시험음을 들어 보세요." : s.state === "idle" ? "입장 전에 소리가 들리는지 확인해 주세요." : "소리가 멈춰 있습니다. 소리 켜기를 눌러 주세요.";
+    $("lobby-audio-status").textContent = message;
+    $("opt-audio-status").textContent = message;
+  });
 
   // 모달 취소
   $("modal-cancel").onclick = () => Client.cancelModal();
