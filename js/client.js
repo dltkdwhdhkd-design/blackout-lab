@@ -14,7 +14,7 @@ window.Client = (function () {
   let fx = { shake: 0, static: 0, flicker: 1, jump: 0, jumpT0: 0, fade: 0, spotted: 0 };
   let holdRev = false, lastRev = 0, lastPos = 0;
   let running = false, raf = 0, last = 0, moving = false;
-  let fuses = MapUtil.fuses(), breakerPos = MapUtil.find("B")[0];
+  let fuses = [], breakerPos = null;
   let onEnd = null, grain = null, wrongFlashT = 0, bobT = 0;
   let intro = null, gore = false, flashOn = 1, locked = false, look = 0, mapOpen = false, mapImg = null;
   let slitSnap = null;
@@ -32,6 +32,7 @@ window.Client = (function () {
     pos = { x: sp.x + 0.5, y: sp.y + 0.5, a: 0 };
     down = false; hidden = null; escaped = false; phase = "play"; modal = null; others.clear();
     document.body.classList.toggle("pc", !isTouch);
+    fuses = MapUtil.fuses(); breakerPos = MapUtil.find("B")[0]; S = null; mon = { x: -99, y: -99, tx: -99, ty: -99, state: "sleep", a: 0, speed: 0 };
     setupInput(); makeGrain(); mapImg = null; mapOpen = false; look = 0; lightOn = true; el("btn-light").classList.add("on");
     running = true; last = performance.now();
     raf = requestAnimationFrame(frame);
@@ -184,14 +185,15 @@ window.Client = (function () {
   // ---------- 문제 ----------
   function openModal(e) {
     const item = QUESTION_BANK[e.unit].items[e.qi];
-    modal = { fuse: e.fuse, unit: e.unit, qi: e.qi, item, t0: performance.now(), answered: false, result: null };
+    const perm = e.perm || item.c.map((_, i) => i);   // 화면 위치 → 원래 보기
+    modal = { fuse: e.fuse, unit: e.unit, qi: e.qi, item, perm, correctPos: perm.indexOf(item.a), t0: performance.now(), answered: false, result: null };
     if (document.pointerLockElement) document.exitPointerLock(); // 보기 클릭을 위해 커서 풀기
     mapOpen = false;
     el("modal").style.display = "flex";
     el("modal-title").textContent = (e.fuse === -1 ? "비상 발전기 · 보안 인증 · " : "단말기 · 보안 인증 · ") + QUESTION_BANK[e.unit].name;
     el("modal-q").textContent = item.q;
     const box = el("modal-choices"); box.innerHTML = "";
-    item.c.forEach((c, i) => { const b = document.createElement("button"); b.textContent = c; b.onclick = () => answer(i); box.appendChild(b); });
+    perm.forEach((orig, i) => { const b = document.createElement("button"); b.textContent = item.c[orig]; b.onclick = () => answer(i); box.appendChild(b); });
     el("modal-exp").textContent = ""; el("modal-cancel").style.display = "";
   }
   function answer(i) {
@@ -203,7 +205,7 @@ window.Client = (function () {
   }
   function modalResult(ok) {
     if (!modal) return;
-    [...el("modal-choices").children].forEach((b, j) => { if (j === modal.item.a) b.classList.add("correct"); else if (j === modal.chosen) b.classList.add("wrong"); });
+    [...el("modal-choices").children].forEach((b, j) => { if (j === modal.correctPos) b.classList.add("correct"); else if (j === modal.chosen) b.classList.add("wrong"); });
     el("modal-exp").textContent = (ok ? "인증 성공 — 에너지 셀 회수. " : "인증 실패 — 경보! 그것이 이쪽으로 온다. 단말기 15초 잠김. ") + modal.item.e;
     setTimeout(closeModal, ok ? 1500 : 2300);
   }
@@ -214,13 +216,18 @@ window.Client = (function () {
 
   // ---------- 인트로: 격리 실패 ----------
   const P = a => ({ x: a[0], y: a[1] });
-  const IN = { cam: { x: INTRO.cam[0], y: INTRO.cam[1], a: INTRO.camA },
-    cell: { x: 8.5, y: 5.2 }, cellDoor: { x: 8.5, y: 7.5 }, door: { x: 8.5, y: 11.2 },
-    r1: P(INTRO.r1), r2: P(INTRO.r2), r3: { x: 17.0, y: 13.5 }, r2end: P(INTRO.kill2), r3end: { x: 19.5, y: 9.6 },
-    m1: { x: 9.3, y: 12.4 }, m2: { x: 16.0, y: 12.9 }, lunge: { x: INTRO.cam[0] - 2.0, y: INTRO.cam[1] } };
+  let IN = null;
+  function buildIN() {   // 그 판 지도의 격리실 앞 복도 좌표 (MapGen 이 계산)
+    const I = window.INTRO, d = (k, def) => I[k] ? P(I[k]) : def;
+    return { cam: { x: I.cam[0], y: I.cam[1], a: I.camA },
+      cell: d("cell", { x: 8.5, y: 5.2 }), cellDoor: d("cellDoor", { x: 8.5, y: 7.5 }), door: d("door", { x: 8.5, y: 11.2 }),
+      r1: P(I.r1), r2: P(I.r2), r3: d("r3", { x: 17.0, y: 13.5 }), r2end: P(I.kill2), r3end: d("r3end", { x: 19.5, y: 9.6 }),
+      m1: d("m1", { x: 9.3, y: 12.4 }), m2: d("m2", { x: 16.0, y: 12.9 }), lunge: d("lunge", { x: I.cam[0] - 2.0, y: I.cam[1] }) };
+  }
   const lerp = (a, b, t) => a + (b - a) * Math.max(0, Math.min(1, t));
   const lerpP = (A, B, t) => ({ x: lerp(A.x, B.x, t), y: lerp(A.y, B.y, t) });
   function beginIntro() {
+    IN = buildIN();
     intro = { t0: performance.now(), t: 0, ambient: 0.9, done: {}, text: "", sub: "", flash: 0, red: 0, shake: 0, black: 0 };
     el("hud").style.visibility = "hidden"; el("btn-act").style.visibility = "hidden"; el("btn-light").style.visibility = "hidden"; el("stick").style.display = "none";
   }

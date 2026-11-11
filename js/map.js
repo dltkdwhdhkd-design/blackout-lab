@@ -91,10 +91,10 @@ window.ROOMS = [
   {"id": "exit", "name": "보안 출구", "x0": 72, "y0": 43, "x1": 79, "y1": 54, "units": [], "tex": "hall"},
 ];
 
-window.INTRO = {"cam": [21.5, 12.8], "camA": 3.22, "door": [8.5, 11.0], "r1": [9.5, 12.6], "r2": [13.5, 13.2], "kill1": [9.5, 12.8], "kill2": [16.5, 12.8], "mstart": [15.5, 12.5], "bodies": [[9.5, 12.8, "body"], [16.5, 12.8, "body2"], [30.5, 8.5, "body2"], [46.5, 33.5, "body"], [75.5, 46.5, "body2"], [2.0, 20.5, "body"]]};
+window.INTRO = {"cam": [21.5, 12.8], "camA": 3.22, "cell": [8.5, 5.2], "cellDoor": [8.5, 7.5], "r3": [17.0, 13.5], "r3end": [19.5, 9.6], "m1": [9.3, 12.4], "m2": [16.0, 12.9], "lunge": [19.5, 12.8], "door": [8.5, 11.0], "r1": [9.5, 12.6], "r2": [13.5, 13.2], "kill1": [9.5, 12.8], "kill2": [16.5, 12.8], "mstart": [15.5, 12.5], "bodies": [[9.5, 12.8, "body"], [16.5, 12.8, "body2"], [30.5, 8.5, "body2"], [46.5, 33.5, "body"], [75.5, 46.5, "body2"], [2.0, 20.5, "body"]]};
 
 window.MapUtil = (function () {
-  const grid = MAP_ROWS.map(r => r.split(""));
+  let grid = MAP_ROWS.map(r => r.split(""));
   function tile(x, y) {
     if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return "#";
     return grid[y][x];
@@ -194,10 +194,21 @@ window.MapUtil = (function () {
     }
     return false;
   }
-  const floorTiles = [];
-  for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (grid[y][x] === "." || grid[y][x] === "S" || grid[y][x] === "M") floorTiles.push({ x: x + 0.5, y: y + 0.5 });
+  let floorTiles = [];
+  function indexFloor() { floorTiles = []; for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (grid[y][x] === "." || grid[y][x] === "S" || grid[y][x] === "M") floorTiles.push({ x: x + 0.5, y: y + 0.5 }); }
+  indexFloor();
+  // 판마다 새 지도로 교체 (MapGen 결과)
+  let seed = 0;
+  const CLASSIC = { rows: MAP_ROWS, rooms: ROOMS, intro: INTRO, seed: 0 };
+  function load(m) {
+    if (!m) m = CLASSIC;
+    window.MAP_ROWS = m.rows; window.MAP_W = m.rows[0].length; window.MAP_H = m.rows.length;
+    window.ROOMS = m.rooms; window.INTRO = m.intro;
+    grid = m.rows.map(r => r.split("")); seed = m.seed || 0; indexFloor();
+    return true;
+  }
   function randomFloor(rng) {
     return floorTiles[Math.floor((rng || Math.random)() * floorTiles.length)];
   }
-  return { tile, solid, solidFor, opaque, roomAt, find, fuses, bfs, los, move, hits, randomFloor, grid };
+  return { tile, solid, solidFor, opaque, roomAt, find, fuses, bfs, los, move, hits, randomFloor, load, get grid() { return grid; }, get seed() { return seed; } };
 })();

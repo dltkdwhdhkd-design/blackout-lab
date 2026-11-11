@@ -35,9 +35,14 @@
     broadcastLobby() { Net.sendToClients(this.lobbyMsg()); renderHostLobby(); },
     start() {
       this.started = true;
+      // 지도: 매판 새로 (번호로 모든 기기가 같은 지도를 만든다) 또는 기본 지도
+      if (this.settings.mapMode === 0) { this.settings.seed = 0; MapUtil.load(null); }
+      else { let m = null; while (!m) { this.settings.seed = 1 + Math.floor(Math.random() * 999998); m = MapGen.generate(this.settings.seed); } MapUtil.load(m); }
+      const cm = document.getElementById("console-map"); if (cm) cm.textContent = this.settings.seed ? "#" + this.settings.seed : "기본";
       const nTeams = Math.max(1, ...[...this.players.values()].map(p => p.team + 1));
       this.worlds = [];
-      for (let i = 0; i < nTeams; i++) this.worlds.push(Sim.createWorld(i, this.settings));
+      let recent = []; try { recent = JSON.parse(localStorage.getItem("blackoutlab.recentQ") || "[]"); } catch (e) {}
+      for (let i = 0; i < nTeams; i++) { const w = Sim.createWorld(i, this.settings); w.avoid = new Set(recent); this.worlds.push(w); }
       for (const p of this.players.values()) Sim.addPlayer(this.worlds[p.team], p.id, p.name);
       HostView.init(this.worlds, this.names());
       this.sendGo();
@@ -53,6 +58,7 @@
       for (const w of this.worlds) {
         Sim.tick(w, dt);
         for (const e of w.events) {
+          if (e.k === "q") rememberQ(e.unit + ":" + e.qi);
           Net.sendToClients({ t: "ev", team: w.team, ...e }, w.team);
           logEvent(w, e);
         }
@@ -72,6 +78,16 @@
     },
   };
   window.__host = HostGame; // 자동 시험용
+  // 최근에 나온 문제 (교사 기기에 저장, 최근 160개) — 다음 판에서 먼저 피한다
+  let recentQ = null;
+  function rememberQ(k) {
+    try {
+      if (!recentQ) recentQ = JSON.parse(localStorage.getItem("blackoutlab.recentQ") || "[]");
+      const i = recentQ.indexOf(k); if (i >= 0) recentQ.splice(i, 1);
+      recentQ.push(k); if (recentQ.length > 160) recentQ.splice(0, recentQ.length - 160);
+      localStorage.setItem("blackoutlab.recentQ", JSON.stringify(recentQ));
+    } catch (e) {}
+  }
   function logEvent(w, e) {
     const nm = id => (HostGame.players.get(id) || {}).name || "?";
     const txt = ({ hunt: "괴물이 기척을 쫓는 중", wake: "괴물이 움직이기 시작했다", caught: `${e.name} 잡힘`, revived: `${nm(e.id)} 회복${e.self ? "(스스로)" : ""}`, exit: "발전기 가동 — 출구 열림", escaped: `${e.name} 탈출`, end: `종료: ${e.result}`, spotted: `${nm(e.id)} 발견됨`, fuse: e.ok ? `${e.by} ${e.fuse === -1 ? "발전기 가동" : "에너지 셀 확보"}` : `${e.by} 오답 — 경보` })[e.k];
@@ -111,7 +127,7 @@
   };
 
   function bindSettings() {
-    const map = { "set-time": ["timeLimit", 60], "set-safe": ["safeTime", 1], "set-speed": ["monsterSpeed", 1], "set-req": ["requiredFuses", 1], "set-team": ["teamSize", 1], "set-scare": ["scare", 1], "set-intro": ["intro", 1] };
+    const map = { "set-time": ["timeLimit", 60], "set-safe": ["safeTime", 1], "set-speed": ["monsterSpeed", 1], "set-req": ["requiredFuses", 1], "set-team": ["teamSize", 1], "set-scare": ["scare", 1], "set-intro": ["intro", 1], "set-map": ["mapMode", 1] };
     for (const id in map) {
       const el = $(id); const [key, mul] = map[id];
       el.value = HostGame.settings[key] / mul;
@@ -162,6 +178,7 @@
       gameStarted = true; myTeam = mine[2]; Net.setTeam(myTeam);
       const names = {}; d.players.forEach(p => names[p[0]] = p[1]);
       const idx = d.players.filter(p => p[2] === myTeam).findIndex(p => p[0] === Net.id);
+      if (!d.settings.seed) MapUtil.load(null); else if (MapUtil.seed !== d.settings.seed) MapUtil.load(MapGen.generate(d.settings.seed));
       show("game");
       Client.start({ id: Net.id, team: myTeam, settings: d.settings, names, spawnIndex: idx, onEnd: clientEnd });
       return;

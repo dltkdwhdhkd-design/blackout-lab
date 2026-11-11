@@ -23,7 +23,8 @@ window.Fps = (function () {
     return T[key] || T.wall;
   }
   function isWall(tx, ty) { const t = MapUtil.tile(tx, ty); return t === "#" || t === "L" || t === "E"; }
-  const BODIES = (window.INTRO ? INTRO.bodies : []).map(b => ({ x: b[0], y: b[1], k: b[2] }));
+  let bodiesFor = null, BODIES = [];
+  function bodies() { if (bodiesFor !== window.INTRO) { bodiesFor = window.INTRO; BODIES = (window.INTRO ? INTRO.bodies : []).map(b => ({ x: b[0], y: b[1], k: b[2] })); } return BODIES; }
 
   // st: {pos:{x,y,a}, fuses, fmask, exitOpen, flicker, monster:{x,y,state,speed}, others:[...], now, downed}
   function render(ctx, W, H, st) {
@@ -94,7 +95,7 @@ window.Fps = (function () {
     for (const o of st.others) if (!o.esc && !o.hid) sprites.push({ kind: o.down ? "mate_down" : "mate", x: o.x, y: o.y, name: o.name, rev: o.rev, light: o.light });
     for (const f of st.fuses) sprites.push({ kind: ((st.fmask >> f.id) & 1) ? "console_off" : "console_on", x: f.x + 0.5, y: f.y + 0.5 });
     const bp = MapUtil.find("B")[0]; sprites.push({ kind: st.exitOpen ? "generator_on" : "generator", x: bp.x + 0.5, y: bp.y + 0.5 });
-    if (st.gore) for (const bd of BODIES) sprites.push({ kind: bd.k, x: bd.x, y: bd.y });
+    if (st.gore) for (const bd of bodies()) sprites.push({ kind: bd.k, x: bd.x, y: bd.y });
     if (st.extra) for (const e of st.extra) sprites.push(e);
     for (const s of sprites) { const dx = s.x - p.x, dy = s.y - p.y; s.d2 = dx * dx + dy * dy; }
     sprites.sort((a, b) => b.d2 - a.d2);

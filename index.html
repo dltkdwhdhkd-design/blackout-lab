@@ -40,6 +40,7 @@
       <label>괴물 속도 <input id="set-speed" type="range" min="0.6" max="1.4" step="0.1"> <span id="set-speed-v"></span>×</label>
       <label>탈출에 필요한 에너지 셀 <input id="set-req" type="range" min="3" max="14" step="1"> <span id="set-req-v"></span>개 / 14</label>
       <label>팀 인원 <input id="set-team" type="range" min="1" max="6" step="1"> <span id="set-team-v"></span>명</label>
+      <label>지도 <select id="set-map"><option value="1">매판 새로 만들기</option><option value="0">기본 지도 고정</option></select></label>
       <label>시작 연출(격리 실패) <select id="set-intro"><option value="1">켜기</option><option value="0">끄기</option></select></label>
       <label>잡혔을 때 연출 <select id="set-scare"><option value="2">전부 (얼굴 포함)</option><option value="1">암전만</option></select></label>
     </div>
@@ -113,7 +114,7 @@
 <!-- 교사 관제 -->
 <section id="s-host-console" class="screen" style="display:none">
   <div id="console-top">
-    <span>관제실 · 방 <b id="console-code"></b></span>
+    <span>관제실 · 방 <b id="console-code"></b> · 지도 <b id="console-map"></b></span>
     <span id="console-net" class="muted small"></span>
     <button id="btn-host-end" class="danger">게임 종료</button>
   </div>
@@ -134,6 +135,7 @@
 <script src="lib/peerjs.min.js"></script>
 <script src="js/questions.js"></script>
 <script src="js/map.js"></script>
+<script src="js/mapgen.js"></script>
 <script src="js/net.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/options.js"></script>

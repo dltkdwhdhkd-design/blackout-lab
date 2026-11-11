@@ -2,7 +2,7 @@
 window.Sim = (function () {
   const PLAYER_SPEED = 3.0;
   const INTRO_LEN = 15;
-  const DEFAULTS = { timeLimit: 900, safeTime: 75, monsterSpeed: 1.0, requiredFuses: 9, teamSize: 4, scare: 2, intro: 1 };
+  const DEFAULTS = { timeLimit: 900, safeTime: 75, monsterSpeed: 1.0, requiredFuses: 9, teamSize: 4, scare: 2, intro: 1, mapMode: 1 };
 
   function createWorld(team, settings) {
     const mf = MapUtil.find("M")[0];
@@ -26,15 +26,19 @@ window.Sim = (function () {
     w.players.set(id, { id, name, x: s.x + 0.5, y: s.y + 0.5, a: 0, down: false, downT: 0, hid: null, hidT: 0, seenHide: false, escaped: false, rev: 0, revT: 0, lastPos: -9, caught: 0, light: true });
   }
 
+  // 이번 판에 안 나온 문제 → 그중에서도 최근 판들(교사 기기에 기록)에 안 나온 문제를 먼저
   function pickQuestion(w, unit) {
     const bank = QUESTION_BANK[unit]; if (!bank) return -1;
     const used = w.usedQ[unit] || (w.usedQ[unit] = []);
     let pool = bank.items.map((_, i) => i).filter(i => !used.includes(i));
     if (!pool.length) { used.length = 0; pool = bank.items.map((_, i) => i); }
+    if (w.avoid && w.avoid.size) { const fresh = pool.filter(i => !w.avoid.has(unit + ":" + i)); if (fresh.length) pool = fresh; }
     const qi = pool[Math.floor(Math.random() * pool.length)];
     used.push(qi);
     return qi;
   }
+  // 보기 순서 섞기: perm[화면 위치] = 원래 보기 번호
+  function shuffledPerm(n) { const a = [...Array(n).keys()]; for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
   const ALL_UNITS = () => Object.keys(QUESTION_BANK);
 
   function emit(w, ev) { w.events.push(ev); }
@@ -70,15 +74,15 @@ window.Sim = (function () {
           if (b.busy && b.busy !== from && w.elapsed - b.busyT < 30) break;
           const unit = b.stage === 0 ? "intro" : ALL_UNITS()[Math.floor(Math.random() * ALL_UNITS().length)];
           const qi = pickQuestion(w, unit);
-          b.busy = from; b.busyT = w.elapsed; b.unit = unit; b.qi = qi;
-          emit(w, { k: "q", id: from, fuse: -1, unit, qi, stage: b.stage });
+          b.busy = from; b.busyT = w.elapsed; b.unit = unit; b.qi = qi; b.perm = shuffledPerm(QUESTION_BANK[unit].items[qi].c.length);
+          emit(w, { k: "q", id: from, fuse: -1, unit, qi, perm: b.perm, stage: b.stage });
         } else {
           const f = w.fuses[m.fuse]; if (!f || f.fixed) break;
           if (f.cool && w.elapsed < f.cool) { emit(w, { k: "cool", id: from, left: Math.ceil(f.cool - w.elapsed) }); break; }
           if (f.busy && f.busy !== from && w.elapsed - f.busyT < 30) break;
           const qi = pickQuestion(w, f.unit);
-          f.busy = from; f.busyT = w.elapsed; f.qi = qi;
-          emit(w, { k: "q", id: from, fuse: f.id, unit: f.unit, qi });
+          f.busy = from; f.busyT = w.elapsed; f.qi = qi; f.perm = shuffledPerm(QUESTION_BANK[f.unit].items[qi].c.length);
+          emit(w, { k: "q", id: from, fuse: f.id, unit: f.unit, qi, perm: f.perm });
         }
         break;
       }
@@ -88,7 +92,10 @@ window.Sim = (function () {
         if (m.fuse === -1) { const b = w.breaker; if (b.busy !== from || b.fixed) break; unit = b.unit; qi = b.qi; target = b; pos = MapUtil.find("B")[0]; }
         else { const f = w.fuses[m.fuse]; if (!f || f.busy !== from || f.fixed) break; unit = f.unit; qi = f.qi; target = f; pos = f; }
         const item = QUESTION_BANK[unit] && QUESTION_BANK[unit].items[qi];
-        const ok = !!item && m.chosen === item.a;
+        // 학생은 화면 위치를 보낸다 → 원래 보기 번호로 바꿔서 채점 (시간 초과는 -1)
+        const chosen = m.chosen >= 0 && target.perm ? target.perm[m.chosen] : m.chosen;
+        m = { ...m, chosen };
+        const ok = !!item && chosen === item.a;
         target.busy = null;
         if (ok) {
           if (m.fuse === -1) {
