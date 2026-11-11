@@ -104,3 +104,15 @@ label.opt.check input { width: 22px; height: 22px; margin: 0; }
 /* iOS: 입력칸 글자가 16px보다 작으면 누를 때 자동 확대된다 — 맨 끝에서 강제 */
 input, select, textarea { font-size: 16px !important; }
 input[type=range], input[type=checkbox] { accent-color: #b52222; }
+
+/* 층 선택 */
+#floor-map-tabs { position:absolute; top:58px; left:50%; transform:translateX(-50%); z-index:10; gap:8px; }
+#floor-map-tabs button { padding:7px 22px; background:#16201e; border-color:#608774; }
+#floor-map-tabs button.primary { background:#315747; color:#e6fff2; }
+#host-floors { position:absolute; top:48px; left:12px; display:flex; gap:6px; z-index:2; }
+#host-floors button { padding:5px 18px; }
+#host-canvas { top:90px; height:calc(100% - 90px); }
+@media(max-width:800px){#host-canvas{height:calc(60% - 46px);}}
+
+.settings label { min-width:0; white-space:nowrap; }
+.settings select { min-width:0; flex:1; }

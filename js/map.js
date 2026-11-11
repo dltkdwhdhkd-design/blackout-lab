@@ -112,16 +112,14 @@ window.MapUtil = (function () {
     if (t === "E") return !exitOpen;
     return solid(x, y);
   }
-  function roomAt(x, y) {
-    const tx = Math.floor(x), ty = Math.floor(y);
-    for (const r of ROOMS) if (tx >= r.x0 && tx <= r.x1 && ty >= r.y0 && ty <= r.y1) return r;
-    return null;
-  }
-  function find(ch) {
-    const out = [];
-    for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (grid[y][x] === ch) out.push({ x, y });
-    return out;
-  }
+  function roomAt(x, y) { return roomIndex[Math.floor(y) * MAP_W + Math.floor(x)] || null; }
+  function floorAt(x, y) { return floors.find(f => y >= f.y0 && y < f.y1 + 1)?.id || 0; }
+  function sameFloor(a, b) { return floorAt(a.x, a.y) === floorAt(b.x, b.y); }
+  function floorInfo(id) { return floors.find(f => f.id === id) || floors[0]; }
+  function stairAt(x, y) { return stairIndex.get(Math.floor(y) * MAP_W + Math.floor(x)); }
+  function nearStair(x, y) { return stairs.find(s => s.floor === floorAt(x,y) && Math.hypot(s.x+0.5-x,s.y+0.5-y) < 1.45 && los(x,y,s.x+0.5,s.y+0.5)); }
+
+  function find(ch) { return tileIndex[ch] || []; }
   // 퓨즈함 목록: 방의 단원을 번갈아 배정
   function fuses() {
     const list = find("F");
@@ -132,7 +130,7 @@ window.MapUtil = (function () {
       const units = room.units.length ? room.units : ["intro"];
       const unit = units[counter[room.id] % units.length];
       counter[room.id]++;
-      return { id: i, x: p.x, y: p.y, unit, room: room.id, fixed: false };
+      return { id: i, x: p.x, y: p.y, unit, room: room.baseId || room.id, fixed: false };
     });
   }
   // BFS 경로 (타일 단위). 괴물용 — 사물함/퓨즈함 통과 불가, 탈출문 통과 불가
@@ -147,8 +145,9 @@ window.MapUtil = (function () {
     while (qi < q.length) {
       const [x, y] = q[qi++];
       if (x === tx && y === ty) break;
-      for (const [dx, dy] of dirs) {
-        const nx = x + dx, ny = y + dy;
+      const step = dirs.map(([dx,dy]) => [x+dx,y+dy]);
+      const stair = stairAt(x,y); if (stair) step.push([Math.floor(stair.to.x),Math.floor(stair.to.y)]);
+      for (const [nx, ny] of step) {
         if (solid(nx, ny) || tile(nx, ny) === "E") continue;
         if (prev[key(nx, ny)] !== -1) continue;
         prev[key(nx, ny)] = key(x, y);
@@ -168,6 +167,7 @@ window.MapUtil = (function () {
   // 시야선: 두 점 사이 벽(또는 사물함)이 있는지 — 단말기·발전기는 시야를 막지 않음
   function opaque(x, y) { const t = tile(x, y); return t === "#" || t === "L" || t === "E" || isTall(t); }
   function los(x0, y0, x1, y1) {
+    if (floorAt(x0,y0) !== floorAt(x1,y1)) return false;
     const dx = x1 - x0, dy = y1 - y0;
     const dist = Math.hypot(dx, dy);
     const steps = Math.ceil(dist * 4);
@@ -203,11 +203,20 @@ window.MapUtil = (function () {
   // 판마다 새 지도로 교체 (MapGen 결과)
   let seed = 0;
   const CLASSIC = { rows: MAP_ROWS, rooms: ROOMS, intro: INTRO, seed: 0 };
+  let floors = [{id:1,name:"1층",y0:0,y1:MAP_H-1}], stairs = [], stairIndex = new Map(), tileIndex = {}, roomIndex = [];
   function load(m) {
     if (!m) m = CLASSIC;
+    if (window.Building) m = Building.expand(m);
     window.MAP_ROWS = m.rows; window.MAP_W = m.rows[0].length; window.MAP_H = m.rows.length;
     window.ROOMS = m.rooms; window.INTRO = m.intro;
-    grid = m.rows.map(r => r.split("")); seed = m.seed || 0; indexFloor();
+    grid = m.rows.map(r => r.split("")); seed = m.seed || 0;
+    floors = m.floors || [{id:1,name:"1층",y0:0,y1:MAP_H-1}]; stairs = m.stairs || [];
+    stairIndex = new Map(stairs.map(s=>[s.y*MAP_W+s.x,s]));
+    tileIndex = {}; roomIndex = [];
+    for (let y=0;y<MAP_H;y++) for(let x=0;x<MAP_W;x++) (tileIndex[grid[y][x]] ||= []).push({x,y});
+    // 먼저 정의된 방 우선순위를 유지하며 렌더링 때 반복 탐색을 없앤다.
+    for (const r of ROOMS) for(let y=r.y0;y<=r.y1;y++) for(let x=r.x0;x<=r.x1;x++) if(!roomIndex[y*MAP_W+x])roomIndex[y*MAP_W+x]=r;
+    indexFloor();
     indexProps();
     // 구급상자 자리: 지도에 없으면(기본 지도) 의무실 바닥에서 두 곳
     if (m.meds) window.MEDKITS = m.meds.map(a => ({ x: a[0], y: a[1] }));
@@ -220,5 +229,5 @@ window.MapUtil = (function () {
     return floorTiles[Math.floor((rng || Math.random)() * floorTiles.length)];
   }
   load(null);
-  return { tile, solid, solidFor, opaque, roomAt, find, fuses, bfs, los, move, hits, randomFloor, load, isProp, get props() { return propList; }, get grid() { return grid; }, get seed() { return seed; } };
+  return { floorAt, sameFloor, floorInfo, stairAt, nearStair, get floors() { return floors; }, get stairs() { return stairs; }, tile, solid, solidFor, opaque, roomAt, find, fuses, bfs, los, move, hits, randomFloor, load, isProp, get props() { return propList; }, get grid() { return grid; }, get seed() { return seed; } };
 })();

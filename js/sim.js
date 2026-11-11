@@ -2,12 +2,12 @@
 window.Sim = (function () {
   const PLAYER_SPEED = 3.0;
   const INTRO_LEN = 15;
-  const DEFAULTS = { timeLimit: 900, safeTime: 75, monsterSpeed: 1.0, requiredFuses: 9, teamSize: 4, scare: 2, intro: 1, mapMode: 1 };
+  const DEFAULTS = { timeLimit: 1200, monsterCount: 2, safeTime: 75, monsterSpeed: 1.0, requiredFuses: 9, teamSize: 4, scare: 2, intro: 1, mapMode: 1 };
 
   function createWorld(team, settings) {
     const mf = MapUtil.find("M")[0];
     const m0 = window.INTRO ? { x: INTRO.mstart[0] - 0.5, y: INTRO.mstart[1] - 0.5 } : mf;
-    return {
+    const world = {
       introT: settings.intro ? INTRO_LEN : 0,
       team, settings,
       players: new Map(),
@@ -21,12 +21,21 @@ window.Sim = (function () {
       medkits: (window.MEDKITS || []).map((m, i) => ({ id: i, x: m.x, y: m.y, taken: false })),
       cctv: { until: 0, cool: 0, busy: null, busyT: 0 },
     };
+    world.monsters = [world.monster];
+    if (settings.monsterCount !== 1) {
+      const room = ROOMS.find(r => r.floor === 2 && r.baseId === "contain1");
+      const entry = MapUtil.stairs.find(s => s.floor === 2);
+      let x = entry ? entry.x + 0.5 : m0.x + 0.5, y = entry ? entry.y + 0.5 : m0.y + 0.5;
+      if (room) outer: for (let ty=room.y0;ty<=room.y1;ty++) for(let tx=room.x0;tx<=room.x1;tx++) if(!MapUtil.solid(tx,ty)){x=tx+0.5;y=ty+0.5;break outer;}
+      world.monsters.push({...world.monster,x,y,state:"dormant",path:[],target:null,targetId:null});
+    }
+    return world;
   }
 
   function addPlayer(w, id, name) {
     const spawns = MapUtil.find("S");
     const s = spawns[w.players.size % spawns.length];
-    w.players.set(id, { id, name, x: s.x + 0.5, y: s.y + 0.5, a: 0, down: false, downT: 0, hid: null, hidT: 0, seenHide: false, escaped: false, rev: 0, revT: 0, lastPos: -9, caught: 0, light: true, carry: 0, medkit: false });
+    w.players.set(id, { id, name, x: s.x + 0.5, y: s.y + 0.5, a: 0, down: false, downT: 0, hid: null, hidT: 0, seenHide: false, escaped: false, rev: 0, revT: 0, lastPos: -9, caught: 0, light: true, carry: 0, medkit: false, travelRev: 0, stairAt: -9 });
   }
 
   // 이번 판에 안 나온 문제 → 그중에서도 최근 판들(교사 기기에 기록)에 안 나온 문제를 먼저
@@ -52,19 +61,25 @@ window.Sim = (function () {
     if (!p) return;
     switch (m.t) {
       case "pos":
-        if (p.down || p.escaped) break;
+        if (p.down || p.escaped || (m.rev || 0) !== p.travelRev || !Number.isFinite(m.x) || !Number.isFinite(m.y) || !MapUtil.sameFloor(p,m)) break;
         if (Math.hypot(m.x - p.x, m.y - p.y) > 0.02) p.lastPos = w.elapsed; // 실제로 움직였을 때만 '발소리'
         p.x = m.x; p.y = m.y; p.a = m.a;
         if (m.l !== undefined) p.light = !!m.l;
         break;
+      case "stairs": {
+        const stair = MapUtil.stairs.find(s => s.id === m.id);
+        if (!stair || w.phase !== "play" || w.introT > 0 || p.down || p.escaped || p.hid || (m.rev || 0) !== p.travelRev || w.elapsed-p.stairAt < 1) break;
+        if (stair.floor !== MapUtil.floorAt(p.x,p.y) || Math.hypot(p.x-stair.x-0.5,p.y-stair.y-0.5) > 1.65 || !MapUtil.los(p.x,p.y,stair.x+0.5,stair.y+0.5)) break;
+        clearQuestion(w,from); p.x=stair.to.x; p.y=stair.to.y; p.travelRev++; p.stairAt=w.elapsed; p.lastPos=w.elapsed;
+        emit(w,{k:"stairs",id:from,name:p.name,floor:stair.to.floor});
+        break;
+      }
       case "hide": {
         if (p.down || p.escaped) break;
         if (!p.hid) p.hidePrev = { x: p.x, y: p.y, a: p.a };
         p.hid = { x: m.x, y: m.y }; p.hidT = w.elapsed;
         if (m.l !== undefined) p.light = !!m.l;
-        const mo = w.monster;
-        const d = Math.hypot(mo.x - p.x, mo.y - p.y);
-        p.seenHide = mo.state !== "sleep" && d < 7 && MapUtil.los(mo.x, mo.y, p.x, p.y);
+        p.seenHide = w.monsters.some(mo => mo.state !== "sleep" && mo.state !== "dormant" && MapUtil.sameFloor(mo,p) && Math.hypot(mo.x-p.x,mo.y-p.y)<7 && MapUtil.los(mo.x,mo.y,p.x,p.y));
         break;
       }
       case "unhide": leaveHiding(w, p); break;
@@ -154,10 +169,12 @@ window.Sim = (function () {
   }
 
   function alertMonster(w, x, y) {
-    const mo = w.monster;
-    if (mo.state === "sleep" || mo.state === "feed" || mo.state === "chase") return;
-    mo.state = "hunt"; mo.alerted = true; mo.target = { x, y }; mo.path = MapUtil.bfs(mo.x, mo.y, x, y) || []; mo.repath = 0;
-    emit(w, { k: "hunt" });
+    let heard = false;
+    for (const mo of w.monsters) {
+      if (["sleep","dormant","feed","chase"].includes(mo.state)) continue;
+      mo.state = "hunt"; mo.alerted = true; mo.target = { x, y }; mo.path = MapUtil.bfs(mo.x, mo.y, x, y) || []; mo.repath = 0; heard = true;
+    }
+    if (heard) emit(w, { k: "hunt" });
   }
 
   function randomRoomTarget(w) {
@@ -181,6 +198,11 @@ window.Sim = (function () {
   function followPath(mo, speed, dt) {
     if (!mo.path.length) return true;
     const n = mo.path[0];
+    if (!MapUtil.sameFloor(mo,n)) {
+      const stair = MapUtil.stairAt(mo.x,mo.y);
+      if (stair && Math.hypot(stair.to.x-n.x,stair.to.y-n.y)<0.1) { mo.x=n.x;mo.y=n.y;mo.path.shift();mo.speed=0;return false; }
+      mo.path=[];return true;
+    }
     const dx = n.x - mo.x, dy = n.y - mo.y;
     const d = Math.hypot(dx, dy);
     const step = speed * dt;
@@ -190,8 +212,9 @@ window.Sim = (function () {
     return false;
   }
 
-  function tickMonster(w, dt) {
-    const mo = w.monster, S = w.settings.monsterSpeed;
+  function tickMonster(w, dt, mo) {
+    if (mo.state === "dormant") return;
+    const S = w.settings.monsterSpeed;
     const noiseBoost = 1;
     const ROAM = 2.1 * S, HUNT = 2.8 * S, CHASE = 3.3 * S;
     mo.speed = 0;
@@ -207,10 +230,10 @@ window.Sim = (function () {
       mo.perc = 0;
       let best = null, bd = 99, lit = null, ld = 99;
       for (const p of w.players.values()) {
-        if (p.down || p.escaped) continue;
+        if (p.down || p.escaped || !MapUtil.sameFloor(p,mo)) continue;
         const d = Math.hypot(p.x - mo.x, p.y - mo.y);
         if (p.hid) {
-          if (p.seenHide && d < 1.3) { catchPlayer(w, p); return; }
+          if (p.seenHide && d < 1.3) { catchPlayer(w, p, mo); return; }
           // 사물함 안에서 손전등을 켜 두면 틈으로 빛이 샌다
           if (p.light && d < 10) { const spot = lockerFront(mo, p.hid); if (spot && d < ld) { ld = d; lit = { p, x: spot.x, y: spot.y, locker: true }; } }
           continue;
@@ -254,7 +277,7 @@ window.Sim = (function () {
       if (best) {
         if (mo.state !== "chase") emit(w, { k: "spotted", id: best.id });
         mo.state = "chase"; mo.targetId = best.id; mo.lastSeen = { x: best.x, y: best.y }; mo.loseLos = 0;
-      } else if (mo.state === "chase") {
+      } else if (mo.state === "chase" && (!w.players.get(mo.targetId) || MapUtil.sameFloor(mo,w.players.get(mo.targetId)))) {
         mo.loseLos += 0.25;
         if (mo.loseLos > 2.2) { mo.state = "search"; mo.target = mo.lastSeen; mo.path = MapUtil.bfs(mo.x, mo.y, mo.target.x, mo.target.y) || []; mo.timer = 3.5; }
       }
@@ -263,8 +286,13 @@ window.Sim = (function () {
     if (mo.state === "chase") {
       const t = w.players.get(mo.targetId);
       if (!t || t.down || t.escaped || t.hid) { mo.state = "search"; mo.target = mo.lastSeen || { x: mo.x, y: mo.y }; mo.path = MapUtil.bfs(mo.x, mo.y, mo.target.x, mo.target.y) || []; mo.timer = 3; return; }
+      if (!MapUtil.sameFloor(mo,t)) {
+        mo.repath -= dt;
+        if (mo.repath <= 0 || !mo.path.length) { mo.path = MapUtil.bfs(mo.x,mo.y,t.x,t.y) || []; mo.repath=1; }
+        followPath(mo,CHASE,dt); return;
+      }
       const d = Math.hypot(t.x - mo.x, t.y - mo.y);
-      if (d < 0.75) { catchPlayer(w, t); return; }
+      if (d < 0.75) { catchPlayer(w, t, mo); return; }
       mo.repath -= dt;
       if (mo.repath <= 0 || !mo.path.length) { mo.path = MapUtil.bfs(mo.x, mo.y, t.x, t.y) || []; mo.repath = 0.4; }
       let moved = false;
@@ -341,16 +369,16 @@ window.Sim = (function () {
   }
   function resumeState(w, id) {
     const p = w.players.get(id);
-    return p ? { x: p.x, y: p.y, a: p.a, hid: p.hid, hidePrev: p.hidePrev || null, light: p.light } : null;
+    return p ? { x: p.x, y: p.y, a: p.a, hid: p.hid, hidePrev: p.hidePrev || null, light: p.light, travelRev: p.travelRev } : null;
   }
   function result(w) {
     return { k: "end", result: w.result, escaped: w.escaped, total: w.players.size, wrongs: w.wrongs, fixed: w.inserted };
   }
-  function catchPlayer(w, p) {
+  function catchPlayer(w, p, mo) {
     if (p.down || p.escaped) return;
     leaveHiding(w, p);
     p.down = true; p.downT = w.elapsed; p.rev = 0; p.revT = -9; p.caught++;
-    const mo = w.monster; mo.state = "feed"; mo.timer = 3.5; mo.targetId = null;
+    mo.state = "feed"; mo.timer = 3.5; mo.targetId = null;
     emit(w, { k: "caught", id: p.id, name: p.name });
     // 잡으면 들고 있던 셀을 그 자리에 떨어뜨린다 (팀원이 주울 수 있음)
     if (p.carry > 0) { w.drops.push({ id: ++w.dropSeq, x: p.x, y: p.y, n: p.carry }); emit(w, { k: "drop", id: p.id, name: p.name, n: p.carry }); p.carry = 0; }
@@ -395,7 +423,16 @@ window.Sim = (function () {
         }
       }
     }
-    tickMonster(w, dt);
+    const second = w.monsters[1];
+    if (second && second.state === "dormant" && w.fuses.filter(f=>f.fixed).length >= Math.ceil(w.fuses.length/2)) {
+      // 회수한 셀 기준. 2층에서 플레이어 바로 앞을 피해 출현한다.
+      for(let tries=0;tries<200;tries++) { const at=MapUtil.randomFloor(); if(MapUtil.floorAt(at.x,at.y)!==2)continue;
+        if([...w.players.values()].some(p=>!p.down&&!p.escaped&&MapUtil.sameFloor(p,at)&&Math.hypot(p.x-at.x,p.y-at.y)<8))continue;
+        second.x=at.x;second.y=at.y;break;
+      }
+      second.state="roam";second.sense=8;emit(w,{k:"wake2",floor:2,threshold:Math.ceil(w.fuses.length/2)});
+    }
+    for (const mo of w.monsters) { if(w.phase !== "play") break; tickMonster(w, dt, mo); }
     checkEnd(w);
   }
 
@@ -404,8 +441,11 @@ window.Sim = (function () {
     let mask = 0; w.fuses.forEach(f => { if (f.fixed) mask |= (1 << f.id); });
     return {
       t: "st", team: w.team,
+      ms: w.monsters.map(m=>[+m.x.toFixed(2),+m.y.toFixed(2),m.state,+m.a.toFixed(2),+m.speed.toFixed(1)]),
+      second: w.monsters[1] ? (w.monsters[1].state === "dormant" ? 0 : 1) : -1,
+      totalCells: w.fuses.length,
       m: [+mo.x.toFixed(2), +mo.y.toFixed(2), mo.state, +mo.a.toFixed(2), +mo.speed.toFixed(1)],
-      p: [...w.players.values()].map(p => [p.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.a.toFixed(2), p.down ? 1 : 0, p.hid ? 1 : 0, p.escaped ? 1 : 0, p.down ? +p.rev.toFixed(1) : 0, p.light ? 1 : 0, p.carry || 0, p.medkit ? 1 : 0]),
+      p: [...w.players.values()].map(p => [p.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.a.toFixed(2), p.down ? 1 : 0, p.hid ? 1 : 0, p.escaped ? 1 : 0, p.down ? +p.rev.toFixed(1) : 0, p.light ? 1 : 0, p.carry || 0, p.medkit ? 1 : 0, p.travelRev || 0]),
       f: mask, b: w.breaker.stage, e: w.exitOpen ? 1 : 0, n: Math.round(w.noise), tm: Math.max(0, Math.round(w.time)), ph: w.phase,
       ins: w.inserted, dr: w.drops.map(d => [+d.x.toFixed(2), +d.y.toFixed(2), d.n]), mk: w.medkits.reduce((a, m) => a | (m.taken ? 1 << m.id : 0), 0),
       cc: Math.max(0, Math.ceil(w.cctv.until - w.elapsed)), ccl: Math.max(0, Math.ceil(w.cctv.cool - w.elapsed)),

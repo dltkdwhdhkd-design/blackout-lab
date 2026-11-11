@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="format-detection" content="telephone=no">
 <title>BLACKOUT LAB — 정전</title>
-<link rel="stylesheet" href="css/style.css?v=20261111-reconnect1">
+<link rel="stylesheet" href="css/style.css?v=20261111-floors1">
 </head>
 <body>
 
@@ -38,6 +38,7 @@
     <div class="settings">
       <label>제한 시간 <input id="set-time" type="range" min="5" max="25" step="1"> <span id="set-time-v"></span>분</label>
       <label>괴물이 깨어나기까지 <input id="set-safe" type="range" min="0" max="180" step="15"> <span id="set-safe-v"></span>초</label>
+      <label>괴물 수 <select id="set-monsters"><option value="1">1마리</option><option value="2">2마리 · 절반 회수 후</option></select></label>
       <label>괴물 속도 <input id="set-speed" type="range" min="0.6" max="1.4" step="0.1"> <span id="set-speed-v"></span>×</label>
       <label>탈출에 필요한 에너지 셀 <input id="set-req" type="range" min="3" max="14" step="1"> <span id="set-req-v"></span>개 / 14</label>
       <label>팀 인원 <input id="set-team" type="range" min="1" max="6" step="1"> <span id="set-team-v"></span>명</label>
@@ -45,6 +46,7 @@
       <label>시작 연출(격리 실패) <select id="set-intro"><option value="1">켜기</option><option value="0">끄기</option></select></label>
       <label>잡혔을 때 연출 <select id="set-scare"><option value="2">전부 (얼굴 포함)</option><option value="1">암전만</option></select></label>
     </div>
+    <p class="muted small">두 번째 개체는 셀 7개를 회수하면 2층에서 출현합니다. 발전기와 탈출구는 1층에 있습니다.</p>
     <div class="row">
       <button id="btn-shuffle">팀 섞기</button>
       <button id="btn-start" class="primary big">시작</button>
@@ -79,6 +81,7 @@
     <div id="hud-safe"></div>
     <div id="hud-team"></div>
   </div>
+  <div id="floor-map-tabs" style="display:none"><button id="map-floor-1">1층</button><button id="map-floor-2">2층</button></div>
   <div id="toast"></div>
   <div id="lock-hint">화면을 클릭하면 마우스로 둘러봅니다 · 클릭/E 상호작용 · 우클릭/F 손전등 · M 지도 · Esc 해제</div>
   <button id="btn-act"></button>
@@ -133,6 +136,7 @@
     <span id="console-net" class="muted small"></span>
     <button id="btn-host-end" class="danger">게임 종료</button>
   </div>
+  <div id="host-floors"><button id="host-floor-1" class="primary">1층</button><button id="host-floor-2">2층</button></div>
   <canvas id="host-canvas"></canvas>
   <div id="host-log"></div>
 </section>
@@ -150,18 +154,19 @@
 <script src="lib/peerjs.min.js"></script>
 <script src="js/questions.js"></script>
 <script src="js/props.js"></script>
-<script src="js/map.js"></script>
+<script src="js/map.js?v=20261111-floors1"></script>
 <script src="js/mapgen.js"></script>
-<script src="js/net.js?v=20261111-reconnect1"></script>
+<script src="js/floors.js?v=20261111-floors1"></script>
+<script src="js/net.js?v=20261111-floors1"></script>
 <script src="js/audio.js"></script>
 <script src="js/options.js"></script>
 <script src="js/propart.js"></script>
 <script src="js/assets.js"></script>
-<script src="js/fps.js"></script>
+<script src="js/fps.js?v=20261111-floors1"></script>
 <script src="js/hand.js"></script>
-<script src="js/sim.js?v=20261111-reconnect1"></script>
-<script src="js/client.js?v=20261111-reconnect1"></script>
-<script src="js/host.js"></script>
-<script src="js/main.js?v=20261111-reconnect1"></script>
+<script src="js/sim.js?v=20261111-floors1"></script>
+<script src="js/client.js?v=20261111-floors1"></script>
+<script src="js/host.js?v=20261111-floors1"></script>
+<script src="js/main.js?v=20261111-floors1"></script>
 </body>
 </html>

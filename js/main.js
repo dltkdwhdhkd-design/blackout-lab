@@ -108,7 +108,7 @@
   }
   function logEvent(w, e) {
     const nm = id => (HostGame.players.get(id) || {}).name || "?";
-    const txt = ({ hunt: "괴물이 기척을 쫓는 중", wake: "괴물이 움직이기 시작했다", caught: `${e.name} 잡힘`, revived: `${nm(e.id)} 회복${e.self ? "(스스로)" : ""}`, exit: "발전기 가동 — 출구 열림", escaped: `${e.name} 탈출`, end: `종료: ${e.result}`, spotted: `${nm(e.id)} 발견됨`, fuse: e.ok ? `${e.by} ${e.fuse === -1 ? "발전기 가동" : "에너지 셀 확보"}` : `${e.by} 오답 — 경보` })[e.k];
+    const txt = ({ wake2: "셀 절반 회수 — 2층에서 두 번째 개체 출현", stairs: `${e.name} ${e.floor}층으로 이동`, hunt: "괴물이 기척을 쫓는 중", wake: "괴물이 움직이기 시작했다", caught: `${e.name} 잡힘`, revived: `${nm(e.id)} 회복${e.self ? "(스스로)" : ""}`, exit: "발전기 가동 — 출구 열림", escaped: `${e.name} 탈출`, end: `종료: ${e.result}`, spotted: `${nm(e.id)} 발견됨`, fuse: e.ok ? `${e.by} ${e.fuse === -1 ? "발전기 가동" : "에너지 셀 확보"}` : `${e.by} 오답 — 경보` })[e.k];
     if (txt) HostView.addLog(w.team, txt);
   }
 
@@ -145,7 +145,7 @@
   };
 
   function bindSettings() {
-    const map = { "set-time": ["timeLimit", 60], "set-safe": ["safeTime", 1], "set-speed": ["monsterSpeed", 1], "set-req": ["requiredFuses", 1], "set-team": ["teamSize", 1], "set-scare": ["scare", 1], "set-intro": ["intro", 1], "set-map": ["mapMode", 1] };
+    const map = { "set-time": ["timeLimit", 60], "set-safe": ["safeTime", 1], "set-speed": ["monsterSpeed", 1], "set-monsters": ["monsterCount", 1], "set-req": ["requiredFuses", 1], "set-team": ["teamSize", 1], "set-scare": ["scare", 1], "set-intro": ["intro", 1], "set-map": ["mapMode", 1] };
     for (const id in map) {
       const el = $(id); const [key, mul] = map[id];
       el.value = HostGame.settings[key] / mul;

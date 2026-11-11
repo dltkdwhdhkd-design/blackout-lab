@@ -18,7 +18,7 @@ window.Fps = (function () {
     if (t === "L") return (st.gore && T.locker_blood && (tx * 13 + ty * 7) % 5 === 0) ? T.locker_blood : T.locker;
     if (t === "E") { const k = st.exitOpen ? "exit_open" : "exit_closed"; return (st.gore && T[k + "_blood"]) || T[k]; }
     const room = MapUtil.roomAt(hx - rdx * 0.03, hy - rdy * 0.03);
-    if (room && window.ROOM_WALL && ROOM_WALL[room.id] && T[ROOM_WALL[room.id]]) return T[ROOM_WALL[room.id]];
+    if (room && window.ROOM_WALL && ROOM_WALL[room.baseId || room.id] && T[ROOM_WALL[room.baseId || room.id]]) return T[ROOM_WALL[room.baseId || room.id]];
     let key = room ? (TEX_BY_ROOM[room.tex] || "wall") : "wall";
     if (st.gore && T[key + "_blood"] && ((tx * 31 + ty * 17) % 23 === 0 || (room && room.id === "contain1" && (tx * 7 + ty) % 4 === 0))) key += "_blood";
     return T[key] || T.wall;
@@ -92,7 +92,8 @@ window.Fps = (function () {
 
     // 스프라이트
     const sprites = [];
-    if (st.monster && st.monster.state !== "sleep") sprites.push({ kind: "monster", x: st.monster.x, y: st.monster.y });
+    for(const m of st.monsters || (st.monster?[st.monster]:[])) if(!["sleep","dormant"].includes(m.state)) sprites.push({kind:"monster",x:m.x,y:m.y,monster:m});
+    for(const stair of MapUtil.stairs) if(stair.floor===MapUtil.floorAt(p.x,p.y)) sprites.push({kind:"stairs",x:stair.x+.5,y:stair.y+.5,stair,scale:2.0,lit:.6});
     for (const o of st.others) if (!o.esc && !o.hid) sprites.push({ kind: o.down ? "mate_down" : "mate", x: o.x, y: o.y, name: o.name, rev: o.rev, light: o.light });
     // 셀이 꽂힌 장비: 방마다 다른 장비 그림. 셀이 남아 있으면 홈이 푸르게 빛나고 초록 등, 꺼내면 빈 홈에 빨간 등
     for (const f of st.fuses) {
@@ -113,6 +114,7 @@ window.Fps = (function () {
     sprites.sort((a, b) => b.d2 - a.d2);
     const invDet = 1 / (planeX * dirY - dirX * planeY);
     for (const s of sprites) {
+      if(!MapUtil.sameFloor(p,s))continue;
       const dx = s.x - p.x, dy = s.y - p.y;
       const trX = invDet * (dirY * dx - dirX * dy);
       const trY = invDet * (-planeY * dx + planeX * dy);
@@ -122,13 +124,15 @@ window.Fps = (function () {
       // 크기(벽 높이 1.6 기준). 쓰러진 인물 그림은 아래 40%에만 있어서 크게 잡는다
       const SC = { mate: 1.4, mate_down: 2.2, console_on: 1.35, console_off: 1.35, generator: 1.45, generator_on: 1.45, body: 2.2, body2: 2.2, researcher: 1.4, researcher_run: 1.4 };
       if (s.kind === "monster") {
+        const monster=s.monster || st.monster;
         let f;
         if (s.frame !== undefined) f = s.frame;
-        else if (st.monster.speed > 0.2) f = [0, 1, 0, 2][Math.floor(st.now / (st.monster.state === "chase" ? 110 : 200)) % 4];
+        else if (monster.speed > 0.2) f = [0, 1, 0, 2][Math.floor(st.now / (monster.state === "chase" ? 110 : 200)) % 4];
         else f = Math.floor(st.now / 700) % 6 === 5 ? 3 : 0;
-        if (st.monster.state === "chase" && s.d2 < 16 && Math.floor(st.now / 90) % 7 === 0) f = 3; // 가까이서 고개가 홱
+        if (monster.state === "chase" && s.d2 < 16 && Math.floor(st.now / 90) % 7 === 0) f = 3; // 가까이서 고개가 홱
         img = Assets.spr.monster[f]; scale = 2.4;
       }
+      else if(s.kind==="stairs"){img=stairArt(s.stair);scale=s.scale;}
       else { img = Assets.spr[s.kind]; scale = s.scale || SC[s.kind] || 1; }
       if (!img) continue;
       const sh = (K / trY) * scale;
@@ -198,6 +202,20 @@ window.Fps = (function () {
     if (!st.downed && !st.noHand) Hand.draw(ctx, W, H, st, flick);
   }
 
+  const stairImages = new Map();
+  function stairArt(stair) {
+    if(stairImages.has(stair.id))return stairImages.get(stair.id);
+    const c=document.createElement("canvas");c.width=160;c.height=200;const g=c.getContext("2d");
+    g.fillStyle="#171f22";g.fillRect(15,15,130,185);g.fillStyle="#070d10";g.fillRect(29,48,102,152);
+    // 낡은 철제 계단과 난간. 기존 연구소의 절차적 소품과 같은 방식으로 그린다.
+    for(let i=0;i<8;i++){const y=88+i*14,x=52-i*4,w=56+i*8;g.fillStyle=i%2?"#49514f":"#626b66";g.fillRect(x,y,w,7);g.fillStyle="#202a2a";g.fillRect(x,y+7,w,7);g.fillStyle="#b9a363";g.fillRect(x,y,w,2);}
+    g.strokeStyle="#87988f";g.lineWidth=3;g.beginPath();g.moveTo(24,174);g.lineTo(53,65);g.lineTo(109,65);g.lineTo(136,174);g.stroke();
+    for(let i=0;i<5;i++){g.beginPath();g.moveTo(24+i*6,174-i*23);g.lineTo(24+i*6,197-i*14);g.moveTo(136-i*6,174-i*23);g.lineTo(136-i*6,197-i*14);g.stroke();}
+    g.fillStyle="#194536";g.fillRect(26,20,108,34);g.strokeStyle="#84d9b7";g.lineWidth=1;g.strokeRect(26,20,108,34);
+    g.fillStyle="#d3ffe8";g.textAlign="center";g.font="bold 21px sans-serif";g.fillText(`${stair.to.floor}F ${stair.floor===1?"↑":"↓"}  ${stair.id.endsWith('0')?'A':'B'}`,80,44);
+    g.fillStyle="rgba(0,0,0,.25)";for(let i=0;i<30;i++)g.fillRect(16+(i*43)%127,60+(i*29)%136,3,2);
+    stairImages.set(stair.id,c);return c;
+  }
   // ---------- 손전등 빛 ----------
   // 원형 빛: 밝은 중심(핫스팟) → 테두리 → 퍼지는 빛 → 어둠. 화면 곱하기로 씌운다.
   const BEAM = [[0, 1.0], [0.16, 0.97], [0.3, 0.84], [0.38, 0.55], [0.5, 0.3], [0.68, 0.14], [0.86, 0.06], [1, 0.025]];

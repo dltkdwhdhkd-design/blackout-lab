@@ -1,10 +1,12 @@
 // 교사 관제 화면 — 팀별 세계를 미니맵으로 (TV에 띄우기)
 window.HostView = (function () {
+  let selectedFloor = 1;
   let cv, ctx, worlds = [], names = {}, log = [];
   const teamColors = ["#7ec8ff", "#ffd27e", "#9dff8a", "#ff9ad5", "#c9a6ff", "#ffb48a", "#8affd9", "#ff8a8a"];
 
   function init(ws, nm) {
     worlds = ws; names = nm; log = [];
+    for(const f of [1,2])document.getElementById("host-floor-"+f).onclick=()=>{selectedFloor=f;for(const k of [1,2])document.getElementById("host-floor-"+k).classList.toggle("primary",k===f);render();};
     cv = document.getElementById("host-canvas"); ctx = cv.getContext("2d");
     document.getElementById("host-log").innerHTML = "";
   }
@@ -29,18 +31,20 @@ window.HostView = (function () {
     });
   }
   function drawWorld(w, x, y, wd, ht, idx) {
-    const T = Math.min(wd / MAP_W, ht / MAP_H);
-    const ox = x + (wd - T * MAP_W) / 2, oy = y + (ht - T * MAP_H) / 2;
+    const floor=MapUtil.floorInfo(selectedFloor),height=floor.y1-floor.y0+1;
+    const T = Math.min(wd / MAP_W, (ht-22) / height);
+    const ox = x + (wd - T * MAP_W) / 2, oy = y+22 + (ht-22 - T * height) / 2 - floor.y0*T;
+    const onFloor=p=>MapUtil.floorAt(p.x,p.y)===selectedFloor;
     // 헤더
     ctx.fillStyle = teamColors[idx % 8]; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
     const fixed = w.fuses.filter(f => f.fixed).length;
     const alive = [...w.players.values()];
     const status = w.introT > 0 ? "시작 연출 중" : w.phase === "end" ? ({ escaped: "전원 탈출", partial: "일부 탈출", lost: "전멸", timeout: "시간 초과" })[w.result] : `${fmt(w.time)} · 발전기 ${w.inserted}/${w.settings.requiredFuses} · 꺼낸 셀 ${fixed}${w.cctv && w.elapsed < w.cctv.until ? " · CCTV" : ""}${w.exitOpen ? " · 출구 열림" : ""}`;
-    ctx.fillText(`${idx + 1}팀  ${status}`, x, y - 8);
-    ctx.fillStyle = "#aaa"; ctx.font = "12px sans-serif"; ctx.textAlign = "right";
-    ctx.fillText(alive.map(p => (p.escaped ? "✓" : p.down ? "✕" : "●") + p.name).join("  "), x + wd, y - 8);
+    ctx.fillText(`${idx + 1}팀 · ${selectedFloor}층  ${status}`, x, y - 8, wd);
+    ctx.fillStyle = "#aaa"; ctx.font = "12px sans-serif"; ctx.textAlign = "left";
+    ctx.fillText(alive.map(p => (p.escaped ? "✓" : p.down ? "✕" : "●") + p.name + `(${MapUtil.floorAt(p.x,p.y)}층)`).join("  "), x, y+8,wd);
     // 맵
-    for (let ty = 0; ty < MAP_H; ty++) for (let tx = 0; tx < MAP_W; tx++) {
+    for (let ty = floor.y0; ty <= floor.y1; ty++) for (let tx = 0; tx < MAP_W; tx++) {
       const t = MapUtil.tile(tx, ty);
       const rm = MapUtil.roomAt(tx + 0.5, ty + 0.5) || {}; ctx.fillStyle = t === "#" ? "#262a31" : rm.tex === "hall" ? "#3b4049" : rm.tex === "contain" ? "#4a3a3a" : rm.tex === "power" ? "#3a3f38" : "#4a4238";
       if (t === "E") ctx.fillStyle = w.exitOpen ? "#2e8b3a" : "#7a2020";
@@ -48,15 +52,16 @@ window.HostView = (function () {
       if (window.PROPS && PROPS[t]) ctx.fillStyle = PROPS[t].tall ? "#4d4a44" : "#5a5650";
       ctx.fillRect(ox + tx * T, oy + ty * T, T, T);
     }
-    for (const f of w.fuses) { ctx.fillStyle = f.fixed ? "#58ff7a" : "#ff4040"; ctx.fillRect(ox + f.x * T + T * 0.2, oy + f.y * T + T * 0.2, T * 0.6, T * 0.6); }
-    const b = MapUtil.find("B")[0]; ctx.fillStyle = w.exitOpen ? "#58ff7a" : "#ffb020"; ctx.fillRect(ox + b.x * T, oy + b.y * T, T, T);
+    for (const f of w.fuses) { if(!onFloor(f))continue; ctx.fillStyle = f.fixed ? "#58ff7a" : "#ff4040"; ctx.fillRect(ox + f.x * T + T * 0.2, oy + f.y * T + T * 0.2, T * 0.6, T * 0.6); }
+    const b = MapUtil.find("B")[0]; ctx.fillStyle = w.exitOpen ? "#58ff7a" : "#ffb020"; if(onFloor(b))ctx.fillRect(ox + b.x * T, oy + b.y * T, T, T);
+    for(const st of MapUtil.stairs)if(onFloor(st)){ctx.fillStyle="#7fffc5";ctx.fillRect(ox+st.x*T,oy+st.y*T,T,T);ctx.font="bold 10px sans-serif";ctx.textAlign=st.x<MAP_W/2?"left":"right";ctx.fillText(`${st.id.endsWith("0")?"A":"B"}→${st.to.floor}층`,ox+(st.x+(st.x<MAP_W/2?2:-1))*T,oy+st.y*T);}
     // 방 이름
     ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.font = `${Math.max(8, T * 1.3)}px sans-serif`; ctx.textAlign = "center";
-    for (const r of ROOMS) if (!r.id.startsWith("hall")) ctx.fillText(r.name, ox + (r.x0 + r.x1 + 1) / 2 * T, oy + (r.y0 + r.y1 + 1) / 2 * T + T * 1.5);
+    for (const r of ROOMS) if (r.floor===selectedFloor && !(r.baseId||r.id).startsWith("hall")) ctx.fillText(r.name, ox + (r.x0 + r.x1 + 1) / 2 * T, oy + (r.y0 + r.y1 + 1) / 2 * T + T * 1.5);
     // 플레이어
     let i = 0;
     for (const p of w.players.values()) {
-      if (p.escaped) { i++; continue; }
+      if (p.escaped || !onFloor(p)) { i++; continue; }
       ctx.fillStyle = p.down ? "#ff6060" : ["#7ec8ff", "#ffd27e", "#9dff8a", "#ff9ad5", "#c9a6ff", "#ffb48a"][i % 6];
       ctx.beginPath(); ctx.arc(ox + p.x * T, oy + p.y * T, T * 0.45, 0, 7); ctx.fill();
       if (p.hid) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke(); }
@@ -64,15 +69,18 @@ window.HostView = (function () {
       ctx.fillStyle = "#fff"; ctx.font = `${Math.max(8, T * 0.9)}px sans-serif`; ctx.fillText(p.name + (p.carry ? " ◆".repeat(p.carry) : "") + (p.medkit ? " ✚" : ""), ox + p.x * T, oy + p.y * T - T * 0.7);
       i++;
     }
-    for (const d of w.drops || []) { ctx.fillStyle = "#7ff6ff"; ctx.beginPath(); ctx.arc(ox + d.x * T, oy + d.y * T, T * 0.5, 0, 7); ctx.fill(); }
+    for (const d of w.drops || []) { if(!onFloor(d))continue; ctx.fillStyle = "#7ff6ff"; ctx.beginPath(); ctx.arc(ox + d.x * T, oy + d.y * T, T * 0.5, 0, 7); ctx.fill(); }
     // 괴물
-    const m = w.monster;
+    for (const [mi,m] of w.monsters.entries()) {
+    if(!onFloor(m))continue;
+    if(m.state === "dormant"){ctx.fillStyle="#e6b96a";ctx.font="11px sans-serif";ctx.fillText(`개체 2: 셀 ${fixed}/${Math.ceil(w.fuses.length/2)}`,ox+m.x*T,oy+m.y*T);continue;}
     if (m.state !== "sleep") {
       ctx.fillStyle = m.state === "chase" ? "#ff2020" : "#b05aff";
       ctx.beginPath(); ctx.moveTo(ox + m.x * T, oy + m.y * T - T * 0.8); ctx.lineTo(ox + m.x * T + T * 0.6, oy + m.y * T + T * 0.5); ctx.lineTo(ox + m.x * T - T * 0.6, oy + m.y * T + T * 0.5); ctx.fill();
       ctx.fillStyle = "#fff"; ctx.font = `${Math.max(8, T * 0.9)}px sans-serif`;
-      ctx.fillText(({ roam: "배회", hunt: "추적", chase: "추격!", search: "수색", feed: "…" })[m.state] || "", ox + m.x * T, oy + m.y * T + T * 1.4);
+      ctx.fillText(`${mi+1} ` + (({ roam: "배회", hunt: "추적", chase: "추격!", search: "수색", feed: "…" })[m.state] || ""), ox + m.x * T, oy + m.y * T + T * 1.4);
     } else { ctx.fillStyle = "#777"; ctx.font = `${Math.max(8, T * 0.9)}px sans-serif`; ctx.fillText(`${Math.max(0, Math.ceil(w.settings.safeTime - w.elapsed))}초 뒤 깨어남`, ox + m.x * T, oy + m.y * T); }
+  }
   }
   function fmt(s) { s = Math.max(0, Math.round(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
 
