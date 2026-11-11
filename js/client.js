@@ -18,6 +18,7 @@ window.Client = (function () {
   let onEnd = null, grain = null, wrongFlashT = 0, bobT = 0;
   let intro = null, gore = false, flashOn = 1, locked = false, look = 0, mapOpen = false, mapImg = null;
   let slitSnap = null;
+  let myCarry = 0, myMed = false;
   let lightOn = true, lightTipShown = false, hideTipShown = false, turnVel = 0, prevA = 0;
   const isTouch = ("ontouchstart" in window) && window.matchMedia && matchMedia("(pointer: coarse)").matches;
   const colors = ["#7ec8ff", "#ffd27e", "#9dff8a", "#ff9ad5", "#c9a6ff", "#ffb48a"];
@@ -109,6 +110,8 @@ window.Client = (function () {
     if (hidden) return { kind: "unhide" };
     for (const [id, o] of others) if (o.down && !o.esc && Math.hypot(o.x - pos.x, o.y - pos.y) < 1.5) return { kind: "rev", id, name: names[id] || "팀원" };
     const fx0 = pos.x + Math.cos(pos.a) * 0.6, fy0 = pos.y + Math.sin(pos.a) * 0.6;
+    if (window.MEDKITS && !myMed) for (let i = 0; i < MEDKITS.length; i++) if (!(S && (S.mk >> i) & 1) && Math.hypot(MEDKITS[i].x - pos.x, MEDKITS[i].y - pos.y) < 1.3) return { kind: "med", id: i };
+    { const tx = Math.floor(fx0), ty = Math.floor(fy0); for (let y = ty - 1; y <= ty + 1; y++) for (let x = tx - 1; x <= tx + 1; x++) if (MapUtil.tile(x, y) === "c" && Math.hypot(x + 0.5 - fx0, y + 0.5 - fy0) < 1.25) return { kind: "cctv" }; }
     for (const f of fuses) if (!(S && (S.f >> f.id) & 1) && Math.hypot(f.x + 0.5 - fx0, f.y + 0.5 - fy0) < 1.25) return { kind: "fuse", fuse: f };
     if (Math.hypot(breakerPos.x + 0.5 - fx0, breakerPos.y + 0.5 - fy0) < 1.25 && !(S && S.e)) return { kind: "breaker" };
     const tx = Math.floor(pos.x), ty = Math.floor(pos.y);
@@ -120,6 +123,8 @@ window.Client = (function () {
     const n = nearest(); if (!n) return;
     if (n.kind === "fuse") Net.sendToHost({ t: "q", fuse: n.fuse.id });
     else if (n.kind === "breaker") Net.sendToHost({ t: "q", fuse: -1 });
+    else if (n.kind === "cctv") Net.sendToHost({ t: "q", fuse: -2 });
+    else if (n.kind === "med") Net.sendToHost({ t: "med", id: n.id });
     else if (n.kind === "hide") {
       hidePrev = { x: pos.x, y: pos.y, a: pos.a }; hidden = { x: n.x, y: n.y }; Net.sendToHost({ t: "hide", x: n.x, y: n.y, l: lightOn ? 1 : 0 }); Horror.breath();
       showToast(lightOn ? "사물함 안. 손전등이 켜져 있다 — 틈으로 빛이 샌다. (F로 끄기)" : "사물함 안. 숨을 죽여라.", 3);
@@ -147,8 +152,8 @@ window.Client = (function () {
       phase = d.ph;
       const seen = new Set();
       for (const p of d.p) {
-        const [id, x, y, a, dn, hid, esc, rev, lt] = p;
-        if (id === me) { down = !!dn; escaped = !!esc; revProgress = rev; continue; }
+        const [id, x, y, a, dn, hid, esc, rev, lt, cr, md] = p;
+        if (id === me) { down = !!dn; escaped = !!esc; revProgress = rev; myCarry = cr || 0; myMed = !!md; continue; }
         seen.add(id);
         let o = others.get(id); if (!o) { o = { x, y, a }; others.set(id, o); }
         o.tx = x; o.ty = y; o.a = a; o.down = !!dn; o.hid = !!hid; o.esc = !!esc; o.rev = rev; o.name = names[id] || ""; o.light = lt !== 0;
@@ -160,10 +165,17 @@ window.Client = (function () {
     switch (e.k) {
       case "q": if (e.id === me) openModal(e); break;
       case "fuse":
-        if (e.ok) { Horror.right(); if (e.id === me && modal) modalResult(true); else showToast(`${e.by}: ${e.fuse === -1 ? "발전기 가동" : "에너지 셀 회수"}`, 2.5); }
+        if (e.ok) { Horror.right(); if (e.id === me && modal) modalResult(true); else showToast(`${e.by}: ${e.fuse === -1 ? "발전기 가동" : "에너지 셀을 꺼냈다"}`, 2.5); }
         else { Horror.wrong(); fx.static = 1; wrongFlashT = 1.2; if (e.id === me && modal) modalResult(false); else showToast(`${e.by} 오답 — 경보가 울렸다. 그것이 소리를 들었다.`, 3); }
         break;
-      case "locked": if (e.id === me) showToast(`에너지 셀이 모자란다. ${e.need}개 더 회수해야 한다.`, 3); break;
+      case "locked": if (e.id === me) showToast(`발전기에 셀이 모자란다. ${e.need}개 더 가져와야 한다.`, 3); break;
+      case "full": if (e.id === me) showToast("손이 가득 찼다(2개). 발전기실에 셀을 먼저 넣고 오자.", 3); break;
+      case "insert": Horror.right(); showToast(`${e.id === me ? "셀" : e.by + ": 셀"} ${e.n}개를 발전기에 넣었다 — ${e.total}/${e.need}` + (e.total >= e.need ? ". 이제 발전기를 돌릴 수 있다!" : ""), 3.5); break;
+      case "drop": showToast(`${e.id === me ? "들고 있던" : e.name + "이(가) 들고 있던"} 셀 ${e.n}개가 바닥에 떨어졌다. 지도에 표시된다.`, 3.5); break;
+      case "pickup": if (e.id === me) showToast(`떨어진 셀 ${e.n}개를 주웠다.`, 2.5); break;
+      case "medkit": showToast(e.id === me ? "구급상자를 챙겼다. 쓰러지면 6초 뒤 혼자 일어난다." : `${e.by}이(가) 구급상자를 챙겼다.`, 3.5); break;
+      case "cctv": Horror.right(); if (e.id === me && modal) modalResult(true); showToast(`CCTV 접속 — ${e.secs}초 동안 괴물과 남은 장비 위치가 화면 위에 보인다.`, 4); break;
+      case "cctvon": if (e.id === me) showToast(`CCTV는 이미 켜져 있다 (${e.left}초 남음).`, 2); break;
       case "cool": if (e.id === me) showToast(`잠겨 있다. ${e.left}초 뒤 다시.`, 2); break;
       case "wake": Horror.bang(); fx.shake = 1; showToast("…건물 어딘가에서 무언가가 깨어났다.", 4); Horror.vibrate([80, 60, 200]); break;
       case "hunt": Horror.scrape(); break;
@@ -190,7 +202,8 @@ window.Client = (function () {
     if (document.pointerLockElement) document.exitPointerLock(); // 보기 클릭을 위해 커서 풀기
     mapOpen = false;
     el("modal").style.display = "flex";
-    el("modal-title").textContent = (e.fuse === -1 ? "비상 발전기 · 보안 인증 · " : "단말기 · 보안 인증 · ") + QUESTION_BANK[e.unit].name;
+    const dev = e.fuse >= 0 && fuses[e.fuse] ? (window.DEVICE_NAME && DEVICE_NAME[fuses[e.fuse].room]) || "장비" : null;
+    el("modal-title").textContent = (e.fuse === -1 ? "비상 발전기 · 기동 인증 · " : e.fuse === -2 ? "CCTV 관제 시스템 · 접속 인증 · " : dev + " · 잠금 해제 · ") + QUESTION_BANK[e.unit].name;
     el("modal-q").textContent = item.q;
     const box = el("modal-choices"); box.innerHTML = "";
     perm.forEach((orig, i) => { const b = document.createElement("button"); b.textContent = item.c[orig]; b.onclick = () => answer(i); box.appendChild(b); });
@@ -206,7 +219,8 @@ window.Client = (function () {
   function modalResult(ok) {
     if (!modal) return;
     [...el("modal-choices").children].forEach((b, j) => { if (j === modal.correctPos) b.classList.add("correct"); else if (j === modal.chosen) b.classList.add("wrong"); });
-    el("modal-exp").textContent = (ok ? "인증 성공 — 에너지 셀 회수. " : "인증 실패 — 경보! 그것이 이쪽으로 온다. 단말기 15초 잠김. ") + modal.item.e;
+    const okMsg = modal.fuse === -1 ? "발전기 가동! " : modal.fuse === -2 ? "CCTV 접속 성공. " : "셀을 꺼냈다 — 비상 발전기실로 가져가자. ";
+    el("modal-exp").textContent = (ok ? okMsg : "인증 실패 — 경보! 그것이 이쪽으로 온다. 15초 잠김. ") + modal.item.e;
     setTimeout(closeModal, ok ? 1500 : 2300);
   }
   function cancelModal() { if (!modal || modal.answered) return; Net.sendToHost({ t: "cancelq", fuse: modal.fuse }); closeModal(); }
@@ -234,7 +248,7 @@ window.Client = (function () {
   function finishIntro() {
     intro = null; flashOn = 1; gore = true; Horror.siren(false);
     el("hud").style.visibility = ""; el("btn-act").style.visibility = ""; el("btn-light").style.visibility = "";
-    showToast(`발전기를 돌려야 보안문이 열린다. 실험실 단말기에서 에너지 셀 ${settings.requiredFuses}개를 회수하라. …그것은 아직 이 건물 안에 있다.`, 7);
+    showToast(`발전기를 돌려야 보안문이 열린다. 방마다 있는 장비에서 에너지 셀을 꺼내(문제) 비상 발전기실로 가져가라. 한 번에 2개까지, 모두 ${settings.requiredFuses}개. …그것은 아직 이 건물 안에 있다.`, 8);
   }
   function once(key, fn) { if (!intro.done[key]) { intro.done[key] = true; fn(); } }
   function updateIntro(dt, now) {
@@ -350,12 +364,13 @@ window.Client = (function () {
   }
   function updateHud() {
     const n = nearest(); const b = el("btn-act");
-    const label = !n ? "" : n.kind === "fuse" ? "셀 회수" : n.kind === "breaker" ? "발전기 가동" : n.kind === "hide" ? "숨기" : n.kind === "unhide" ? "나오기" : "구조 (꾹)";
+    const label = !n ? "" : n.kind === "fuse" ? "셀 꺼내기" : n.kind === "breaker" ? (myCarry > 0 ? `셀 넣기 (${myCarry})` : "발전기 가동") : n.kind === "cctv" ? "CCTV" : n.kind === "med" ? "구급상자" : n.kind === "hide" ? "숨기" : n.kind === "unhide" ? "나오기" : "구조 (꾹)";
     b.textContent = !isTouch && label ? (n.kind === "rev" ? "E 꾹 · " : "E · ") + label.replace(" (꾹)", "") : label; b.classList.toggle("on", !!n && !down && !escaped && !modal && phase === "play");
     if (S) {
       const fixed = countBits(S.f);
       const room = MapUtil.roomAt(pos.x, pos.y);
-      el("hud-fuse").textContent = `에너지 셀 ${fixed}/${S.req}` + (S.e ? " · 출구 열림" : "") + (room ? ` · ${room.name}` : "");
+      void fixed;
+      el("hud-fuse").textContent = `발전기 ${S.ins || 0}/${S.req} · 손 ${"◆".repeat(myCarry)}${"◇".repeat(Math.max(0, 2 - myCarry))}` + (myMed ? " · ✚" : "") + (S.cc ? ` · CCTV ${S.cc}` : "") + (S.e ? " · 출구 열림" : "") + (room ? ` · ${room.name}` : "");
       el("hud-time").textContent = fmt(S.tm);
       const md = Math.hypot(mon.x - pos.x, mon.y - pos.y);
       el("hud-noise").style.width = (mon.state === "sleep" ? 0 : Math.max(0, 100 - md * 8)) + "%";
@@ -385,13 +400,35 @@ window.Client = (function () {
       glow: lightOn || down ? 0 : 0.16,
       monster: mon, others: [...others.values()], now, downed: down, moving, pitch: Math.sin(bobT) * (moving ? 4 : 0), gore,
       look: hidden ? 0 : look, turn: hidden ? 0 : turnVel,
+      drops: S ? S.dr : null, meds: (window.MEDKITS || []).filter((m, i) => !(S && (S.mk >> i) & 1)),
     });
     ctx.restore();
     if (hidden) drawLockerSlit(ctx);
     if (down) drawDowned(ctx, now);
     postFx(ctx, now);
     if (mapOpen && !fx.jump) drawMap(ctx, now);
+    else if (S && S.cc > 0 && !fx.jump && !down) drawCctv(ctx, now);
     if (fx.jump) drawJumpScare(ctx, now);
+  }
+
+  // 지도 위 표시: 떨어진 셀(항상), CCTV가 켜져 있으면 남은 장비와 괴물
+  function drawMarks(c, ox, oy, u, now) {
+    if (S && S.dr) for (const d of S.dr) { c.fillStyle = "#7ff6ff"; c.beginPath(); c.arc(ox + d[0] * u, oy + d[1] * u, Math.max(3, u * 0.55), 0, 7); c.fill(); }
+    if (!(S && S.cc > 0)) return;
+    for (const f of fuses) if (!((S.f >> f.id) & 1)) { c.fillStyle = "#ffd34a"; c.fillRect(ox + f.x * u, oy + f.y * u, Math.max(3, u), Math.max(3, u)); }
+    if (mon.state !== "sleep") { const r = Math.max(4, u * 0.9) * (1 + 0.25 * Math.sin(now / 120)); c.fillStyle = "#ff2a2a"; c.beginPath(); c.arc(ox + mon.x * u, oy + mon.y * u, r, 0, 7); c.fill(); }
+  }
+  // CCTV가 켜져 있는 동안 오른쪽 위 작은 화면
+  function drawCctv(c, now) {
+    if (!mapImg) mapImg = buildMap();
+    const mw = Math.min(W * 0.34, 300), k = mw / mapImg.width, mh = mapImg.height * k, ox = W - mw - 10, oy = 64;
+    c.save(); c.globalAlpha = 0.88; c.fillStyle = "#000"; c.fillRect(ox - 4, oy - 20, mw + 8, mh + 24); c.drawImage(mapImg, ox, oy, mw, mh); c.globalAlpha = 1;
+    const u = k * 8;
+    drawMarks(c, ox, oy, u, now);
+    c.fillStyle = "#9bdcff"; c.beginPath(); c.arc(ox + pos.x * u, oy + pos.y * u, Math.max(3, u * 0.7), 0, 7); c.fill();
+    c.fillStyle = Math.floor(now / 500) % 2 ? "#ff4040" : "#bbb"; c.font = "bold 12px ui-monospace, monospace"; c.textAlign = "left"; c.fillText(`● CCTV  ${S.cc}s`, ox, oy - 6);
+    c.fillStyle = "rgba(255,255,255,0.05)"; for (let y = oy; y < oy + mh; y += 3) c.fillRect(ox, y, mw, 1);
+    c.restore();
   }
 
   // ---------- 안내도 (M) ----------
@@ -422,6 +459,7 @@ window.Client = (function () {
     const u = k * 8;
     let i = 0;
     for (const [id, o] of others) { i++; if (o.esc) continue; c.fillStyle = o.down ? "#ff4a4a" : colors[(S ? S.p.findIndex(p => p[0] === id) : i) % colors.length]; c.beginPath(); c.arc(ox + o.x * u, oy + o.y * u, Math.max(3, u * 0.5), 0, 7); c.fill(); }
+    drawMarks(c, ox, oy, u, now);
     c.save(); c.translate(ox + pos.x * u, oy + pos.y * u); c.rotate(pos.a);
     c.fillStyle = Math.floor(now / 300) % 2 ? "#ffffff" : "#9bdcff";
     const a = Math.max(5, u * 1.4);

@@ -261,6 +261,14 @@ window.Assets = (function () {
     [0, 1, 2, 3].forEach(i => { if (has("monster_" + i)) tryImage("monster_" + i, im => { spr.monster[i] = im; }); });
     for (const k of ["hand_on", "hand_off", "mate", "mate_down", "console_on", "console_off", "generator", "generator_on", "researcher", "researcher_run", "body", "body2"]) if (has(k)) tryImage(k, im => { spr[k] = im; });
     if (has("scare")) tryImage("scare", im => { spr.scare = im; });
+    // 방 소품·장비·아이템·방 벽: 기본은 코드 그림, img/ 에 그림이 있으면 교체 (장비는 그림이 있을 때만 씀)
+    if (window.PropArt && window.PROPS) {
+      for (const ch in PROPS) { const k = PROPS[ch].key; spr[k] = PropArt.make(k); if (has(k)) tryImage(k, im => { spr[k] = im; }); }
+      for (const k of ["it_cell", "it_medkit"]) { spr[k] = PropArt.make(k); if (has(k)) tryImage(k, im => { spr[k] = im; }); }
+      for (const k of Object.values(DEVICE_KEY)) { spr[k] = PropArt.make(k); spr[k + "_e"] = PropArt.make(k + "_e"); if (has(k)) tryImage(k, im => { img[k] = im; }); }
+      for (const k of Object.values(ROOM_WALL)) { tex[k] = PropArt.wall(k); if (has(k)) tryImage(k, im => { tex[k] = im; }); }
+    }
   }
-  return { init, tex, spr, TEX };
+  const img = {};   // 실제 그림 파일이 들어온 것만
+  return { init, tex, spr, img, TEX };
 })();

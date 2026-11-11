@@ -166,24 +166,28 @@ window.MapGen = (function () {
     // 인트로 복도 구간에는 사물함을 두지 않는다
     const introX0 = doorX - 1, introX1 = doorX + 16;
 
-    // ---- 방 안 가구 ----
+    // ---- 방 안 가구: 방마다 콘셉트에 맞는 소품 (props.js 글자) ----
+    const PROP_OF = { phy: "p", chem: "b", bio: "u", heat: "h", earth: "k", monitor: "c", server: "r", archive: "a", medical: "d",
+      meeting: "t", office: "o", lounge: "z", lobby: "q", power: "x", mech: "x", store: "s", cafeteria: "e", changing: "L" };
     for (const r of rooms) {
-      const w = r.x1 - r.x0 + 1, h = r.y1 - r.y0 + 1;
+      const w = r.x1 - r.x0 + 1, h = r.y1 - r.y0 + 1, P = PROP_OF[r.id] || "#";
       switch (r.kind) {
-        case "benches": { for (let y = r.y0 + 2; y <= r.y1 - 2; y += ri(3, 4)) { const gap = ri(r.x0 + 2, r.x1 - 2); tryBlock(r, r.x0 + 2, y, gap - 1, y); tryBlock(r, gap + 2, y, r.x1 - 2, y); } break; }
-        case "hoods": { for (let x = r.x0 + 2; x <= r.x1 - 3; x += ri(4, 6)) { const top = R() < 0.5; const len = ri(3, Math.max(3, h - 4)); if (top) tryBlock(r, x, r.y0, x + 1, r.y0 + len - 1); else tryBlock(r, x, r.y1 - len + 1, x + 1, r.y1); } break; }
-        case "desks": { for (let y = r.y0 + 2; y <= r.y1 - 2; y += 3) for (let x = r.x0 + 2; x <= r.x1 - 3; x += ri(5, 7)) tryBlock(r, x, y, x + ri(1, 3), y); break; }
-        case "racks": case "shelves": { let flip = R() < 0.5; for (let x = r.x0 + 2; x <= r.x1 - 2; x += ri(3, 4)) { if (flip) tryBlock(r, x, r.y0, x, r.y1 - 2); else tryBlock(r, x, r.y0 + 2, x, r.y1); flip = !flip; } break; }
-        case "beds": { for (let x = r.x0 + 1; x <= r.x1 - 3; x += ri(4, 5)) { tryBlock(r, x, r.y0 + 1, x + 2, r.y0 + 1); tryBlock(r, x, r.y1 - 1, x + 2, r.y1 - 1); } break; }
-        case "pillars": { const sx = ri(5, 7); for (let y = r.y0 + 2; y <= r.y1 - 2; y += ri(4, 5)) for (let x = r.x0 + 3; x <= r.x1 - 3; x += sx) tryBlock(r, x, y, x, y); if (R() < 0.7) tryBlock(r, lcx - 3, lcy - 3, lcx + 3, lcy - 3); break; }
-        case "table": { const tw = Math.max(2, w - ri(6, 8)), th = Math.max(2, h - ri(6, 7)); const tx = r.x0 + Math.floor((w - tw) / 2), ty = r.y0 + Math.floor((h - th) / 2); tryBlock(r, tx, ty, tx + tw - 1, ty + th - 1); break; }
-        case "tables": { for (let y = r.y0 + 2; y <= r.y1 - 2; y += ri(4, 5)) for (let x = r.x0 + 2; x <= r.x1 - 3; x += ri(4, 6)) tryBlock(r, x, y, x + 1, y + (R() < 0.5 ? 0 : 1)); break; }
-        case "machines": { const n = ri(2, 4); for (let k = 0; k < n * 4 && k < 40; k++) { const bw = ri(2, 3), bh = ri(2, 3), x = ri(r.x0 + 1, r.x1 - bw), y = ri(r.y0 + 1, r.y1 - bh); tryBlock(r, x, y, x + bw - 1, y + bh - 1); } break; }
-        case "rows": { for (let x = r.x0 + 2; x <= r.x1 - 2; x += 3) { const gapTop = R() < 0.5; tryBlock(r, x, r.y0 + (gapTop ? 2 : 0), x, r.y1 - (gapTop ? 0 : 2)); } break; }
-        case "checkpoint": { const y = r.y0 + Math.floor(h / 2); const gx = ri(r.x0 + 1, r.x1 - 1); tryBlock(r, r.x0, y, gx - 1, y); tryBlock(r, gx + 1, y, r.x1, y); break; }
-        case "cell": { const cx = ri(r.x0 + 1, Math.max(r.x0 + 1, r.x1 - 6)), cy = r.y0 + 1; if (w >= 8 && h >= 7) { const ok = tryBlock(r, cx, cy, cx + 5, cy, "#") && tryBlock(r, cx, cy + 1, cx, cy + 3) && tryBlock(r, cx + 5, cy + 1, cx + 5, cy + 3) && tryBlock(r, cx + 1, cy + 3, cx + 2, cy + 3) && tryBlock(r, cx + 4, cy + 3, cx + 4, cy + 3); void ok; } break; }
+        case "benches": { for (let y = r.y0 + 2; y <= r.y1 - 2; y += ri(3, 4)) { const gap = ri(r.x0 + 2, r.x1 - 2); tryBlock(r, r.x0 + 2, y, gap - 1, y, P); tryBlock(r, gap + 2, y, r.x1 - 2, y, P); } break; }
+        case "hoods": { for (let x = r.x0 + 1; x <= r.x1 - 1; x += ri(3, 4)) tryBlock(r, x, R() < 0.5 ? r.y0 : r.y1, x, R() < 0.5 ? r.y0 : r.y1, "f"); for (let y = r.y0 + 3; y <= r.y1 - 3; y += 4) { const x0 = ri(r.x0 + 2, r.x0 + 4); tryBlock(r, x0, y, Math.min(r.x1 - 3, x0 + ri(2, 5)), y, "b"); } break; }
+        case "desks": { for (let y = r.y0 + 2; y <= r.y1 - 2; y += 3) for (let x = r.x0 + 2; x <= r.x1 - 3; x += ri(4, 6)) tryBlock(r, x, y, x + ri(1, 2), y, P); break; }
+        case "racks": case "shelves": { let flip = R() < 0.5; for (let x = r.x0 + 2; x <= r.x1 - 2; x += ri(3, 4)) { if (flip) tryBlock(r, x, r.y0, x, r.y1 - 2, P); else tryBlock(r, x, r.y0 + 2, x, r.y1, P); flip = !flip; } break; }
+        case "beds": { for (let x = r.x0 + 1; x <= r.x1 - 3; x += ri(3, 4)) { tryBlock(r, x, r.y0 + 1, x, r.y0 + 2, "d"); tryBlock(r, x, r.y1 - 2, x, r.y1 - 1, "d"); } for (let k = 0; k < 2; k++) placeAgainstWall(r, "m", 3, null); break; }
+        case "pillars": { const sx = ri(5, 7); for (let y = r.y0 + 2; y <= r.y1 - 2; y += ri(4, 5)) for (let x = r.x0 + 3; x <= r.x1 - 3; x += sx) tryBlock(r, x, y, x, y); if (R() < 0.8) tryBlock(r, lcx - 2, lcy - 3, lcx + 2, lcy - 3, "q"); break; }
+        case "table": { const tw = Math.max(2, Math.min(6, w - ri(6, 8))), th = Math.max(1, Math.min(3, h - ri(6, 7))); const tx = r.x0 + Math.floor((w - tw) / 2), ty = r.y0 + Math.floor((h - th) / 2); tryBlock(r, tx, ty, tx + tw - 1, ty + th - 1, "t"); break; }
+        case "tables": { for (let y = r.y0 + 2; y <= r.y1 - 2; y += ri(3, 4)) for (let x = r.x0 + 2; x <= r.x1 - 3; x += ri(3, 5)) tryBlock(r, x, y, x + (R() < 0.5 ? 0 : 1), y, P); if (r.id === "lounge") for (let k = 0; k < 2; k++) placeAgainstWall(r, "v", 3, null); break; }
+        case "machines": { const n = ri(3, 5); for (let k = 0; k < n * 4 && k < 50; k++) { const bw = ri(1, 2), bh = ri(1, 2), x = ri(r.x0 + 1, r.x1 - bw), y = ri(r.y0 + 1, r.y1 - bh); tryBlock(r, x, y, x + bw - 1, y + bh - 1, "x"); } break; }
+        case "rows": { for (let x = r.x0 + 2; x <= r.x1 - 2; x += 3) { const gapTop = R() < 0.5; tryBlock(r, x, r.y0 + (gapTop ? 2 : 0), x, r.y1 - (gapTop ? 0 : 2), "L"); } break; }
+        case "checkpoint": { const y = r.y0 + Math.floor(h / 2); const gx = ri(r.x0 + 2, r.x1 - 2); tryBlock(r, r.x0, y, gx - 2, y); tryBlock(r, gx + 2, y, r.x1, y); tryBlock(r, gx - 1, y, gx - 1, y, "g"); tryBlock(r, gx + 1, y, gx + 1, y, "g"); break; }
+        case "cell": { const cx = ri(r.x0 + 1, Math.max(r.x0 + 1, r.x1 - 6)), cy = r.y0 + 1; if (w >= 8 && h >= 7) { tryBlock(r, cx, cy, cx + 5, cy) && tryBlock(r, cx, cy + 1, cx, cy + 3) && tryBlock(r, cx + 5, cy + 1, cx + 5, cy + 3) && tryBlock(r, cx + 1, cy + 3, cx + 2, cy + 3) && tryBlock(r, cx + 4, cy + 3, cx + 4, cy + 3); } break; }
       }
     }
+    // 관찰 제어실엔 CCTV 관제석이 꼭 하나 이상
+    { const mon = rooms.find(r => r.id === "monitor"); if (mon && !g.slice(mon.y0, mon.y1 + 1).some(row => row.slice(mon.x0, mon.x1 + 1).includes("c"))) if (!placeAgainstWall(mon, "c", 0, null)) return null; }
 
     // ---- 단말기(에너지 셀) 14개 ----
     const cellRooms = rooms.filter(r => r.cells);
@@ -225,6 +229,10 @@ window.MapGen = (function () {
       if ((c === "F" || c === "B") && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => seen.has(K(x + dx, y + dy)))) return null;
     }
 
+    // ---- 구급상자 자리: 의무실 바닥 두 곳 ----
+    const meds = [];
+    { const med = rooms.find(r => r.id === "medical"); for (let t = 0; t < 200 && meds.length < 2; t++) { const x = ri(med.x0, med.x1), y = ri(med.y0, med.y1); if (g[y][x] === "." && !protect.has(K(x, y)) && !meds.some(m => Math.abs(m[0] - x) + Math.abs(m[1] - y) < 3)) meds.push([x + 0.5, y + 0.5]); } if (meds.length < 2) return null; }
+
     // ---- 인트로 좌표 (뒤집기 전 기준) ----
     const yNw = hA + 1;
     const intro = {
@@ -252,7 +260,7 @@ window.MapGen = (function () {
     const out = {};
     for (const k in intro) out[k] = k === "bodies" ? intro.bodies.map(b => [...T(b), b[2]]) : T(intro[k]);
     out.camA = Math.atan2(out.look[1] - out.cam[1], out.look[0] - out.cam[0]);
-    return { rows, rooms: outRooms, intro: out };
+    return { rows, rooms: outRooms, intro: out, meds: meds.map(T) };
   }
   return { generate };
 })();

@@ -18,6 +18,7 @@ window.Fps = (function () {
     if (t === "L") return (st.gore && T.locker_blood && (tx * 13 + ty * 7) % 5 === 0) ? T.locker_blood : T.locker;
     if (t === "E") { const k = st.exitOpen ? "exit_open" : "exit_closed"; return (st.gore && T[k + "_blood"]) || T[k]; }
     const room = MapUtil.roomAt(hx - rdx * 0.03, hy - rdy * 0.03);
+    if (room && window.ROOM_WALL && ROOM_WALL[room.id] && T[ROOM_WALL[room.id]]) return T[ROOM_WALL[room.id]];
     let key = room ? (TEX_BY_ROOM[room.tex] || "wall") : "wall";
     if (st.gore && T[key + "_blood"] && ((tx * 31 + ty * 17) % 23 === 0 || (room && room.id === "contain1" && (tx * 7 + ty) % 4 === 0))) key += "_blood";
     return T[key] || T.wall;
@@ -93,7 +94,19 @@ window.Fps = (function () {
     const sprites = [];
     if (st.monster && st.monster.state !== "sleep") sprites.push({ kind: "monster", x: st.monster.x, y: st.monster.y });
     for (const o of st.others) if (!o.esc && !o.hid) sprites.push({ kind: o.down ? "mate_down" : "mate", x: o.x, y: o.y, name: o.name, rev: o.rev, light: o.light });
-    for (const f of st.fuses) sprites.push({ kind: ((st.fmask >> f.id) & 1) ? "console_off" : "console_on", x: f.x + 0.5, y: f.y + 0.5 });
+    // 셀이 꽂힌 장비: 방마다 다른 장비 그림. 셀이 남아 있으면 홈이 푸르게 빛나고 초록 등, 꺼내면 빈 홈에 빨간 등
+    for (const f of st.fuses) {
+      const empty = (st.fmask >> f.id) & 1, dk = window.DEVICE_KEY && DEVICE_KEY[f.room];
+      if (dk && Assets.img[dk]) { Assets.spr[dk] = Assets.img[dk]; sprites.push({ kind: dk, x: f.x + 0.5, y: f.y + 0.5, scale: 1.35, dim: !!empty }); }
+      else if (dk && Assets.spr[dk]) { sprites.push({ kind: empty ? dk + "_e" : dk, x: f.x + 0.5, y: f.y + 0.5, scale: 1.45, lit: empty ? 0.12 : 0.3 }); continue; }
+      else sprites.push({ kind: empty ? "console_off" : "console_on", x: f.x + 0.5, y: f.y + 0.5 });
+      if (!empty) sprites.push({ kind: "it_cell", x: f.x + 0.5, y: f.y + 0.5, lift: 1.33 + 0.03 * Math.sin(st.now / 380 + f.id), scale: 0.22, glow: 0.75 });
+    }
+    // 방 소품 (가까운 것만)
+    if (window.PROPS) for (const pr of MapUtil.props) { const dx = pr.x + 0.5 - p.x, dy = pr.y + 0.5 - p.y; if (dx * dx + dy * dy > 225) continue; sprites.push({ kind: PROPS[pr.ch].key, x: pr.x + 0.5, y: pr.y + 0.5, scale: PROPS[pr.ch].h }); }
+    // 떨어진 셀, 구급상자
+    if (st.drops) for (const d of st.drops) sprites.push({ kind: "it_cell", x: d[0], y: d[1], scale: 0.32, glow: 0.7 });
+    if (st.meds) for (const m of st.meds) sprites.push({ kind: "it_medkit", x: m.x, y: m.y, scale: 0.3 });
     const bp = MapUtil.find("B")[0]; sprites.push({ kind: st.exitOpen ? "generator_on" : "generator", x: bp.x + 0.5, y: bp.y + 0.5 });
     if (st.gore) for (const bd of bodies()) sprites.push({ kind: bd.k, x: bd.x, y: bd.y });
     if (st.extra) for (const e of st.extra) sprites.push(e);
@@ -121,7 +134,7 @@ window.Fps = (function () {
       if (!img) continue;
       const sh = (K / trY) * scale;
       const sw = sh * img.width / img.height;
-      const bottom = horizon + K * EYE / trY; // 바닥 접점
+      const bottom = horizon + K * (EYE - (s.lift || 0)) / trY; // 바닥 접점 (떠 있는 물건은 lift 만큼 위)
       const top = bottom - sh + yoff;
       const x0 = Math.floor(scrX - sw / 2), x1 = Math.ceil(scrX + sw / 2);
       const camX = trX / trY;
@@ -129,6 +142,10 @@ window.Fps = (function () {
                    : brightness(camX, trY, flick, st.ambient, st.glow);
       if (s.kind === "mate" && s.light) b = Math.max(b, 0.55 / (1 + trY * 0.12)); // 팀원 손전등은 멀리서도 보인다
       if (s.kind === "console_on" || s.kind === "generator_on") b = Math.max(b, 0.35 / (1 + trY * 0.15)); // 화면 빛이 스스로 난다
+      if (s.glow) b = Math.max(b, s.glow / (1 + trY * 0.08));   // 스스로 빛나는 물건(에너지 셀)
+      if (s.kind === "p_cctv" || s.kind === "p_rack" || s.kind === "p_vending") b = Math.max(b, 0.16 / (1 + trY * 0.15));
+      if (s.lit) b = Math.max(b, s.lit / (1 + trY * 0.15));   // 장비 화면·표시등은 어둠 속에서도 희미하게 보인다
+      if (s.dim) b *= 0.55;
       if (b < 0.03 && s.kind !== "monster") continue;
       // 보이는 부분만 임시 캔버스에 그린 뒤 그 픽셀만 어둡게 해서 붙인다 (배경까지 칠하지 않도록)
       const cx0 = Math.max(0, x0), cx1 = Math.min(RW, x1);

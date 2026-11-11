@@ -17,13 +17,16 @@ window.Sim = (function () {
       exitOpen: false, noise: 0, time: settings.timeLimit, elapsed: 0,
       phase: "play", usedQ: {}, wrongs: [], events: [], escaped: 0, result: null,
       wokeAnnounced: false,
+      inserted: 0, drops: [], dropSeq: 0,                                   // 발전기에 넣은 셀, 바닥에 떨어진 셀
+      medkits: (window.MEDKITS || []).map((m, i) => ({ id: i, x: m.x, y: m.y, taken: false })),
+      cctv: { until: 0, cool: 0, busy: null, busyT: 0 },
     };
   }
 
   function addPlayer(w, id, name) {
     const spawns = MapUtil.find("S");
     const s = spawns[w.players.size % spawns.length];
-    w.players.set(id, { id, name, x: s.x + 0.5, y: s.y + 0.5, a: 0, down: false, downT: 0, hid: null, hidT: 0, seenHide: false, escaped: false, rev: 0, revT: 0, lastPos: -9, caught: 0, light: true });
+    w.players.set(id, { id, name, x: s.x + 0.5, y: s.y + 0.5, a: 0, down: false, downT: 0, hid: null, hidT: 0, seenHide: false, escaped: false, rev: 0, revT: 0, lastPos: -9, caught: 0, light: true, carry: 0, medkit: false });
   }
 
   // 이번 판에 안 나온 문제 → 그중에서도 최근 판들(교사 기기에 기록)에 안 나온 문제를 먼저
@@ -69,15 +72,27 @@ window.Sim = (function () {
         if (m.fuse === -1) {
           const b = w.breaker;
           if (b.fixed) break;
+          if (p.carry > 0) { w.inserted += p.carry; emit(w, { k: "insert", id: from, by: p.name, n: p.carry, total: w.inserted, need: w.settings.requiredFuses }); p.carry = 0; break; }
           if (b.cool && w.elapsed < b.cool) { emit(w, { k: "cool", id: from, left: Math.ceil(b.cool - w.elapsed) }); break; }
-          if (!requiredMet(w)) { emit(w, { k: "locked", id: from, need: w.settings.requiredFuses - w.fuses.filter(f => f.fixed).length }); break; }
+          if (!requiredMet(w)) { emit(w, { k: "locked", id: from, need: w.settings.requiredFuses - w.inserted }); break; }
           if (b.busy && b.busy !== from && w.elapsed - b.busyT < 30) break;
           const unit = b.stage === 0 ? "intro" : ALL_UNITS()[Math.floor(Math.random() * ALL_UNITS().length)];
           const qi = pickQuestion(w, unit);
           b.busy = from; b.busyT = w.elapsed; b.unit = unit; b.qi = qi; b.perm = shuffledPerm(QUESTION_BANK[unit].items[qi].c.length);
           emit(w, { k: "q", id: from, fuse: -1, unit, qi, perm: b.perm, stage: b.stage });
+        } else if (m.fuse === -2) {
+          // CCTV 관제석: 맞히면 20초 동안 팀 전체에 괴물·장비 위치가 보인다
+          const c = w.cctv;
+          if (w.elapsed < c.until) { emit(w, { k: "cctvon", id: from, left: Math.ceil(c.until - w.elapsed) }); break; }
+          if (w.elapsed < c.cool) { emit(w, { k: "cool", id: from, left: Math.ceil(c.cool - w.elapsed) }); break; }
+          if (c.busy && c.busy !== from && w.elapsed - c.busyT < 30) break;
+          const unit = ALL_UNITS()[Math.floor(Math.random() * ALL_UNITS().length)];
+          const qi = pickQuestion(w, unit);
+          c.busy = from; c.busyT = w.elapsed; c.unit = unit; c.qi = qi; c.perm = shuffledPerm(QUESTION_BANK[unit].items[qi].c.length);
+          emit(w, { k: "q", id: from, fuse: -2, unit, qi, perm: c.perm });
         } else {
           const f = w.fuses[m.fuse]; if (!f || f.fixed) break;
+          if (p.carry >= 2) { emit(w, { k: "full", id: from }); break; }
           if (f.cool && w.elapsed < f.cool) { emit(w, { k: "cool", id: from, left: Math.ceil(f.cool - w.elapsed) }); break; }
           if (f.busy && f.busy !== from && w.elapsed - f.busyT < 30) break;
           const qi = pickQuestion(w, f.unit);
@@ -90,6 +105,7 @@ window.Sim = (function () {
         if (w.phase !== "play") break;
         let unit, qi, pos, target;
         if (m.fuse === -1) { const b = w.breaker; if (b.busy !== from || b.fixed) break; unit = b.unit; qi = b.qi; target = b; pos = MapUtil.find("B")[0]; }
+        else if (m.fuse === -2) { const c = w.cctv; if (c.busy !== from) break; unit = c.unit; qi = c.qi; target = c; pos = { x: Math.floor(p.x), y: Math.floor(p.y) }; }
         else { const f = w.fuses[m.fuse]; if (!f || f.busy !== from || f.fixed) break; unit = f.unit; qi = f.qi; target = f; pos = f; }
         const item = QUESTION_BANK[unit] && QUESTION_BANK[unit].items[qi];
         // 학생은 화면 위치를 보낸다 → 원래 보기 번호로 바꿔서 채점 (시간 초과는 -1)
@@ -98,11 +114,12 @@ window.Sim = (function () {
         const ok = !!item && chosen === item.a;
         target.busy = null;
         if (ok) {
+          if (m.fuse === -2) { target.until = w.elapsed + 20; target.cool = w.elapsed + 60; emit(w, { k: "cctv", id: from, by: p.name, secs: 20 }); break; }
           if (m.fuse === -1) {
             w.breaker.stage++;
             if (w.breaker.stage >= 1) { w.breaker.fixed = true; w.exitOpen = true; emit(w, { k: "exit" }); }
-          } else target.fixed = true;
-          emit(w, { k: "fuse", fuse: m.fuse, ok: true, by: p.name, id: from, stage: w.breaker.stage });
+          } else { target.fixed = true; p.carry++; }
+          emit(w, { k: "fuse", fuse: m.fuse, ok: true, by: p.name, id: from, stage: w.breaker.stage, carry: p.carry });
           
         } else {
           w.wrongs.push({ name: p.name, unit, qi, chosen: m.chosen });
@@ -119,7 +136,15 @@ window.Sim = (function () {
         t.revT = w.elapsed; t.reviver = from;
         break;
       }
+      case "med": {   // 구급상자 줍기
+        const mk = w.medkits[m.id];
+        if (!mk || mk.taken || p.medkit || p.down || p.escaped) break;
+        if (Math.hypot(mk.x - p.x, mk.y - p.y) > 1.6) break;
+        mk.taken = true; p.medkit = true; emit(w, { k: "medkit", id: from, by: p.name });
+        break;
+      }
       case "cancelq": {
+        if (m.fuse === -2) { if (w.cctv.busy === from) w.cctv.busy = null; break; }
         if (m.fuse === -1) { if (w.breaker.busy === from) w.breaker.busy = null; }
         else { const f = w.fuses[m.fuse]; if (f && f.busy === from) f.busy = null; }
         break;
@@ -300,9 +325,11 @@ window.Sim = (function () {
     p.down = true; p.downT = w.elapsed; p.hid = null; p.caught++;
     const mo = w.monster; mo.state = "feed"; mo.timer = 3.5; mo.targetId = null;
     emit(w, { k: "caught", id: p.id, name: p.name });
-    // 퓨즈 잠금 해제
+    // 잡으면 들고 있던 셀을 그 자리에 떨어뜨린다 (팀원이 주울 수 있음)
+    if (p.carry > 0) { w.drops.push({ id: ++w.dropSeq, x: p.x, y: p.y, n: p.carry }); emit(w, { k: "drop", id: p.id, name: p.name, n: p.carry }); p.carry = 0; }
     for (const f of w.fuses) if (f.busy === p.id) f.busy = null;
     if (w.breaker.busy === p.id) w.breaker.busy = null;
+    if (w.cctv.busy === p.id) w.cctv.busy = null;
     checkEnd(w);
   }
 
@@ -311,12 +338,13 @@ window.Sim = (function () {
     const alive = [...w.players.values()].filter(p => !p.escaped);
     if (!w.players.size) return;
     if (alive.length === 0) { end(w, "escaped"); return; }
-    if (alive.every(p => p.down)) { end(w, w.escaped > 0 ? "partial" : "lost"); return; }
+    // 구급상자를 가진 사람은 곧 혼자 일어나므로 전멸이 아니다
+    if (alive.every(p => p.down && !p.medkit)) { end(w, w.escaped > 0 ? "partial" : "lost"); return; }
     if (w.time <= 0) { end(w, w.escaped > 0 ? "partial" : "timeout"); }
   }
   function end(w, result) {
     w.phase = "end"; w.result = result;
-    emit(w, { k: "end", result, escaped: w.escaped, total: w.players.size, wrongs: w.wrongs, fixed: w.fuses.filter(f => f.fixed).length });
+    emit(w, { k: "end", result, escaped: w.escaped, total: w.players.size, wrongs: w.wrongs, fixed: w.inserted });
   }
 
   function tick(w, dt) {
@@ -330,7 +358,13 @@ window.Sim = (function () {
         if (w.elapsed - p.revT < 0.35) { p.rev += dt; if (p.rev >= 3) { p.down = false; p.rev = 0; emit(w, { k: "revived", id: p.id, by: p.reviver }); } }
         else p.rev = Math.max(0, p.rev - dt * 0.5);
         if (w.elapsed - p.downT > 45) { p.down = false; p.rev = 0; emit(w, { k: "revived", id: p.id, self: true }); }
-      } else if (!p.escaped && w.exitOpen) {
+        else if (p.medkit && w.elapsed - p.downT > 6) { p.down = false; p.rev = 0; p.medkit = false; emit(w, { k: "revived", id: p.id, self: true, med: true }); }
+      } else if (!p.escaped && !p.hid && p.carry < 2 && w.drops.length) {
+        // 떨어진 셀 위를 지나가면 줍는다
+        for (const d of w.drops) { if (d.n <= 0 || Math.hypot(d.x - p.x, d.y - p.y) > 0.9) continue; const take = Math.min(d.n, 2 - p.carry); d.n -= take; p.carry += take; emit(w, { k: "pickup", id: p.id, name: p.name, n: take }); if (p.carry >= 2) break; }
+        w.drops = w.drops.filter(d => d.n > 0);
+      }
+      if (!p.down && !p.escaped && w.exitOpen) {
         if (MapUtil.tile(Math.floor(p.x), Math.floor(p.y)) === "E") {
           p.escaped = true; w.escaped++; emit(w, { k: "escaped", id: p.id, name: p.name });
         }
@@ -346,13 +380,15 @@ window.Sim = (function () {
     return {
       t: "st", team: w.team,
       m: [+mo.x.toFixed(2), +mo.y.toFixed(2), mo.state, +mo.a.toFixed(2), +mo.speed.toFixed(1)],
-      p: [...w.players.values()].map(p => [p.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.a.toFixed(2), p.down ? 1 : 0, p.hid ? 1 : 0, p.escaped ? 1 : 0, p.down ? +p.rev.toFixed(1) : 0, p.light ? 1 : 0]),
+      p: [...w.players.values()].map(p => [p.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.a.toFixed(2), p.down ? 1 : 0, p.hid ? 1 : 0, p.escaped ? 1 : 0, p.down ? +p.rev.toFixed(1) : 0, p.light ? 1 : 0, p.carry || 0, p.medkit ? 1 : 0]),
       f: mask, b: w.breaker.stage, e: w.exitOpen ? 1 : 0, n: Math.round(w.noise), tm: Math.max(0, Math.round(w.time)), ph: w.phase,
+      ins: w.inserted, dr: w.drops.map(d => [+d.x.toFixed(2), +d.y.toFixed(2), d.n]), mk: w.medkits.reduce((a, m) => a | (m.taken ? 1 << m.id : 0), 0),
+      cc: Math.max(0, Math.ceil(w.cctv.until - w.elapsed)), ccl: Math.max(0, Math.ceil(w.cctv.cool - w.elapsed)),
       req: w.settings.requiredFuses, safe: Math.max(0, Math.round(w.settings.safeTime - w.elapsed)), it: +Math.max(0, w.introT).toFixed(1),
     };
   }
 
-  function requiredMet(w) { return w.fuses.filter(f => f.fixed).length >= w.settings.requiredFuses; }
+  function requiredMet(w) { return w.inserted >= w.settings.requiredFuses; }
 
   return { DEFAULTS, PLAYER_SPEED, createWorld, addPlayer, handle, tick, snapshot, requiredMet };
 })();

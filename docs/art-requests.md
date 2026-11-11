@@ -35,3 +35,27 @@
 ## 벽 텍스처 (선택)
 - `img/wall.png`(실험실 흰 타일) `img/hall.png`(복도 패널) `img/contain.png`(격리실 콘크리트) `img/power.png`(설비실 금속) `img/locker.png` `img/exit_closed.png` `img/exit_open.png`, 피 묻은 버전은 이름 뒤에 `_blood`
 - 규격: 정사각형(128×128 또는 256×256), 이음새 없이 반복되는 타일. 벽 한 칸에 한 장이 세로로 1.6배 늘어나 붙습니다.
+
+## 방 장비·가구 (Higgsfield로 뽑아 넣을 것)
+기본 그림은 `js/propart.js`가 그립니다. 아래 이름으로 PNG를 넣으면 `js/assets.js`의 `PROVIDED`에 이름을 추가해 바꿉니다. 모두 **투명 배경, 정면, 물건 아래쪽이 그림 맨 아래에 닿게**.
+
+공통 앞부분(그대로 붙이고 끝에 물건 설명만 바꿈):
+> Single game prop sprite for a dark 1990s-style first-person horror game set in an abandoned underground science research facility. Painterly digital art with a slightly rough pixel-grain texture, muted desaturated colors, cold teal-grey and dirty beige tones, lit only from the front by a flashlight so the edges fall into darkness. Straight front view at eye level, the whole object visible and centered, its base touching the bottom edge of the image. Isolated object on a fully transparent background, no floor, no wall, no cast shadow, no text, no labels, no people. The object: ...
+
+**셀이 꽂힌 장비 (세로 3:4)** — 가운데쯤에 푸르게 빛나는 원통형 에너지 셀이 꽂힌 홈이 보이게. 빈 상태는 게임이 어둡게 처리합니다.
+| 파일 | 방 | 물건 |
+|---|---|---|
+| `dev_phy` | 물리 실험실 | 계기판 바늘 두 개와 손잡이가 달린 회색 전원 공급 장치, 위에 구리 코일 |
+| `dev_chem` | 화학 분석실 | 유리문 안에 시약병이 줄지어 있는 흰 시약 냉장고, 아래 칸에 셀 홈 |
+| `dev_bio` | 생물 배양실 | 둥근 창 안이 초록빛으로 빛나고 페트리 접시가 쌓인 스테인리스 배양기 |
+| `dev_heat` | 열 실험실 | 창 안의 열선이 주황빛으로 달아오른 검은 항온 가열 장치 |
+| `dev_earth` | 지질 시료실 | 유리 돔 안에 암석 시료, 옆에 파형이 뜬 작은 화면이 달린 베이지 분석기 |
+| `dev_server` | 서버실 | LED 막대가 켜진 검은 무정전 전원 장치 |
+| `dev_monitor` | 관찰 제어실 | 노란 경고 줄무늬와 번개 표지, 빨간 레버가 달린 비상 전원함 |
+| `dev_medical` | 의무실 | 심전도 모니터를 올린 흰 의료 카트, 바퀴와 서랍 |
+
+**가구** — 가로형(3:2): `p_bench`(유리 기구가 놓인 실험대) `p_physbench`(스탠드·용수철·빗면이 놓인 물리 실험대) `p_microscope`(현미경 두 대가 놓인 흰 실험대) `p_hotplate`(가열판과 비커) `p_cctv`(CCTV 모니터 6대가 놓인 관제 책상) `p_bed`(얼룩진 병상) `p_desk`(구형 모니터 사무 책상) `p_meeting`(의자가 딸린 회의 탁자) `p_cafe`(식판이 엎어진 식탁) `p_gate`(보안 게이트) `p_reception`(안내 데스크) `p_sofa`(낡은 소파). 세로형(2:3): `p_hood`(흄 후드) `p_rockshelf`(암석 시료 선반) `p_rack`(서버 랙) `p_medcab`(유리 약품장) `p_bookshelf`(서류 책장) `p_machine`(배관이 달린 기계 설비) `p_shelf`(상자가 쌓인 철제 선반) `p_vending`(깨진 자판기).
+
+**아이템 (1:1)**: `it_cell`(빛나는 에너지 셀 하나), `it_medkit`(흰 구급상자).
+
+**방 벽 (정사각형, 이음새 없이 반복, 불투명)**: `room_monitor`(CCTV 모니터가 격자로 박힌 벽) `room_server`(서버 LED 패널 벽) `room_archive`(서류 책장 벽) `room_medical`(청록 타일 의무실 벽).

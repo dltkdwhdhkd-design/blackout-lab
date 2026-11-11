@@ -101,8 +101,11 @@ window.MapUtil = (function () {
   }
   function solid(x, y) {
     const t = tile(x, y);
-    return t === "#" || t === "F" || t === "B" || t === "L";
+    return t === "#" || t === "F" || t === "B" || t === "L" || isProp(t);
   }
+  // 방 소품(props.js): 모두 지나갈 수 없고, 키 큰 것만 시야를 가린다
+  function isProp(t) { return !!(window.PROPS && PROPS[t]); }
+  function isTall(t) { return !!(window.PROPS && PROPS[t] && PROPS[t].tall); }
   // 탈출문은 열리기 전엔 벽처럼
   function solidFor(x, y, exitOpen) {
     const t = tile(x, y);
@@ -163,7 +166,7 @@ window.MapUtil = (function () {
     return path;
   }
   // 시야선: 두 점 사이 벽(또는 사물함)이 있는지 — 단말기·발전기는 시야를 막지 않음
-  function opaque(x, y) { const t = tile(x, y); return t === "#" || t === "L" || t === "E"; }
+  function opaque(x, y) { const t = tile(x, y); return t === "#" || t === "L" || t === "E" || isTall(t); }
   function los(x0, y0, x1, y1) {
     const dx = x1 - x0, dy = y1 - y0;
     const dist = Math.hypot(dx, dy);
@@ -205,10 +208,17 @@ window.MapUtil = (function () {
     window.MAP_ROWS = m.rows; window.MAP_W = m.rows[0].length; window.MAP_H = m.rows.length;
     window.ROOMS = m.rooms; window.INTRO = m.intro;
     grid = m.rows.map(r => r.split("")); seed = m.seed || 0; indexFloor();
+    indexProps();
+    // 구급상자 자리: 지도에 없으면(기본 지도) 의무실 바닥에서 두 곳
+    if (m.meds) window.MEDKITS = m.meds.map(a => ({ x: a[0], y: a[1] }));
+    else { const r = ROOMS.find(r => r.id === "medical"); const out = []; if (r) for (let y = r.y0 + 1; y <= r.y1 - 1 && out.length < 2; y += 3) for (let x = r.x0 + 1; x <= r.x1 - 1 && out.length < 2; x += 5) if (grid[y][x] === ".") out.push({ x: x + 0.5, y: y + 0.5 }); window.MEDKITS = out; }
     return true;
   }
+  let propList = [];
+  function indexProps() { propList = []; for (let y = 0; y < MAP_H; y++) for (let x = 0; x < MAP_W; x++) if (isProp(grid[y][x])) propList.push({ x, y, ch: grid[y][x] }); }
   function randomFloor(rng) {
     return floorTiles[Math.floor((rng || Math.random)() * floorTiles.length)];
   }
-  return { tile, solid, solidFor, opaque, roomAt, find, fuses, bfs, los, move, hits, randomFloor, load, get grid() { return grid; }, get seed() { return seed; } };
+  load(null);
+  return { tile, solid, solidFor, opaque, roomAt, find, fuses, bfs, los, move, hits, randomFloor, load, isProp, get props() { return propList; }, get grid() { return grid; }, get seed() { return seed; } };
 })();
