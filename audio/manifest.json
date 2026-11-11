@@ -1,0 +1,72 @@
+{
+  "sampleRate": 32000,
+  "origin": "Original synthesized sound design; no third-party recordings.",
+  "clips": [
+    {
+      "name": "monster_growl",
+      "seconds": 3.35,
+      "bytes": 34604,
+      "peak": 0.7863
+    },
+    {
+      "name": "monster_snarl",
+      "seconds": 1.55,
+      "bytes": 16604,
+      "peak": 0.7851
+    },
+    {
+      "name": "monster_breath",
+      "seconds": 3.85,
+      "bytes": 39284,
+      "peak": 0.7865
+    },
+    {
+      "name": "monster_step_a",
+      "seconds": 0.97,
+      "bytes": 10484,
+      "peak": 0.7744
+    },
+    {
+      "name": "monster_step_b",
+      "seconds": 0.97,
+      "bytes": 10484,
+      "peak": 0.7806
+    },
+    {
+      "name": "scream_a",
+      "seconds": 2.0,
+      "bytes": 20924,
+      "peak": 0.7653
+    },
+    {
+      "name": "scream_b",
+      "seconds": 2.2,
+      "bytes": 23084,
+      "peak": 0.7677
+    },
+    {
+      "name": "impact",
+      "seconds": 1.8,
+      "bytes": 18764,
+      "peak": 0.8293
+    },
+    {
+      "name": "pursuit_loop",
+      "seconds": 6.0,
+      "bytes": 60884,
+      "peak": 0.7797
+    },
+    {
+      "name": "capture",
+      "seconds": 3.6,
+      "bytes": 36764,
+      "peak": 0.7743
+    },
+    {
+      "name": "wake",
+      "seconds": 3.4,
+      "bytes": 34964,
+      "peak": 0.7775
+    }
+  ]
+}

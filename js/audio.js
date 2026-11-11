@@ -1,7 +1,8 @@
-// 공포 사운드 — 전부 Web Audio로 즉석 생성 (외부 파일 없음)
+// 공포 사운드 — 오리지널 음원 + Web Audio 공간 믹싱, 합성음 예비 경로
 window.Horror = (function () {
   let ctx = null, master = null, started = false;
   let drone = null, droneGain = null, hbTimer = null, hbRate = 55, hbGain = null;
+  let scene = [], voiceState = new Map(), previewSerial = 0, lastStinger = -99;
   let proximity = 0; // 0~1 괴물 근접도
   let whisperTimer = null, stepTimer = null, stepRate = 0, stepVol = 0, stepPan = 0;
   let muted = false;
@@ -14,6 +15,8 @@ window.Horror = (function () {
   function dispose() {
     clearTimeout(hbTimer); clearTimeout(whisperTimer); clearTimeout(stepTimer);
     hbTimer = whisperTimer = stepTimer = null;
+    if (window.SoundBank) SoundBank.detach();
+    scene = []; voiceState.clear(); previewSerial++;
     const old = ctx;
     ctx = null; started = false; sirenNodes = null;
     if (old) {
@@ -33,7 +36,12 @@ window.Horror = (function () {
       try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       ctx.onstatechange = notify;
-      master = ctx.createGain(); master.gain.value = muted ? 0 : vol; master.connect(ctx.destination);
+      master = ctx.createGain(); master.gain.value = muted ? 0 : vol; if (ctx.createDynamicsCompressor) {
+        const limiter = ctx.createDynamicsCompressor(); limiter.threshold.value = -10; limiter.knee.value = 12;
+        limiter.ratio.value = 8; limiter.attack.value = .003; limiter.release.value = .22;
+        master.connect(limiter); limiter.connect(ctx.destination);
+      } else master.connect(ctx.destination);
+      if (window.SoundBank) SoundBank.attach(ctx, master);
       startDrone(); startHeartbeat(); startWhispers(); startSteps(); startRoomTone();
       started = true; failed = false;
       if (window.Options) Options.apply();
@@ -138,6 +146,7 @@ window.Horror = (function () {
     sched();
   }
   function whisper() {
+    if (!ctx || ctx.state !== "running") return;
     const t = now(), dur = 1.6 + Math.random() * 1.4;
     const src = ctx.createBufferSource(); src.buffer = noiseBuffer(dur);
     const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 6;
@@ -154,11 +163,85 @@ window.Horror = (function () {
   // 괴물 발소리 — 거리와 방향
   function startSteps() {
     const tick = () => {
-      const interval = stepRate > 0 ? 1000 / stepRate : 600;
-      if (ctx.state === "running" && stepRate > 0 && stepVol > 0.001) step();
-      stepTimer = setTimeout(tick, interval + (Math.random() - 0.5) * 60);
+      if (ctx.state === "running") sceneTick();
+      stepTimer = setTimeout(tick, 90);
     };
     tick();
+  }
+  function sample(name, options) { return window.SoundBank && SoundBank.play(name, options); }
+  function updateScene(actors) {
+    if(!ctx)return;
+    scene = actors;
+    const ids = new Set();
+    let pressure = 0;
+    for (const a of actors) {
+      ids.add(a.id);
+      const near = Math.max(0,1-a.dist/18);
+      a.gain = near ** 1.5 * (a.sees ? 1 : .42);
+      if (!voiceState.has(a.id)) voiceState.set(a.id,{step:0,voice:now()+.4,foot:0});
+      if (window.SoundBank) SoundBank.emitter(a.id,{gain:a.gain,pan:a.pan,cutoff:a.sees?7600:950});
+      pressure = Math.max(pressure,near*(a.state==="chase"?.13:.045));
+    }
+    for (const id of voiceState.keys()) if (!ids.has(id)) voiceState.delete(id);
+    if (window.SoundBank) { SoundBank.silenceEmitters(ids); SoundBank.tension(pressure*amb); }
+  }
+  function sceneTick() {
+    const t=now();
+    for (const a of scene) {
+      if(a.dist>18)continue;
+      const st=voiceState.get(a.id);if(!st)continue;
+      if(a.speed>.2&&t>=st.step){
+        const name=(st.foot++%2)?"monster_step_b":"monster_step_a";
+        if(!sample(name,{emitter:a.id,gain:.6,rate:.92+Math.random()*.14,channel:"scene"})){
+          stepVol=a.gain*.38;stepPan=a.pan;step();
+        }
+        st.step=t+Math.max(.26,.75-a.speed*.12)*( .9+Math.random()*.2);
+      }
+      if(a.dist<16&&t>=st.voice){
+        const name=a.state==="chase"?"monster_snarl":(Math.random()<.55?"monster_breath":"monster_growl");
+        if(!sample(name,{emitter:a.id,gain:name==="monster_breath"?.3:.47,rate:.94+Math.random()*.12,channel:"scene"})) breath();
+        st.voice=t+(a.state==="chase"?2.6:5.2)+Math.random()*2.4;
+      }
+    }
+  }
+  function silenceScene() {
+    scene=[];voiceState.clear();
+    if(window.SoundBank){SoundBank.stopChannel("scene");SoundBank.silenceEmitters(new Set());}
+    if(ctx){proximity=0;hbGain.gain.setTargetAtTime(0,now(),.2);droneGain.gain.setTargetAtTime(.04*amb,now(),.4);}
+  }
+  function monsterCry(kind="wake", pan=0) {
+    if(!ctx||ctx.state!=="running")return;
+    if(kind==="spotted"&&now()-lastStinger<3)return;
+    if(kind==="spotted")lastStinger=now();
+    if(!sample(kind==="spotted"?"monster_snarl":"wake",{gain:kind==="spotted"?.6:.48,pan,channel:"effect"}))scrape();
+  }
+  function researcherScream(variant=0,pan=0,gain=.65,channel="intro") {
+    if(!ctx||ctx.state!=="running")return;
+    if(!sample(variant%2?"scream_b":"scream_a",{gain,pan,channel}))scrape();
+  }
+  function introAttack(variant,pan) {
+    researcherScream(variant,pan,.7);
+    sample("monster_snarl",{gain:.33,pan,at:.12,channel:"intro"});
+    if(!sample("impact",{gain:.4,pan,at:.08,channel:"intro"}))bang();
+  }
+  function introEnd() { if(window.SoundBank)SoundBank.stopChannel("intro"); }
+  function stopPreview() { previewSerial++; if(window.SoundBank)SoundBank.stopChannel("preview"); }
+  function preview(kind) {
+    const pending=init(), token=++previewSerial;
+    return pending.then(async ok=>{
+      if(!ok)return false;
+      const current=ctx;
+      if(window.SoundBank)await SoundBank.ready();
+      if(ctx!==current||token!==previewSerial)return false;
+      if(window.SoundBank)SoundBank.stopChannel("preview");
+      const play=(name,o={})=>sample(name,{gain:.55,...o,channel:"preview"});
+      if(kind==="approach"){
+        for(let i=0;i<6;i++)play(i%2?"monster_step_b":"monster_step_a",{gain:.08+i*.075,pan:-.8+i*.32,at:i*.47,rate:.92+i*.025});
+        play("monster_breath",{gain:.24,pan:.35,at:1.2});
+        return !!play("monster_growl",{gain:.42,pan:.55,at:2.4});
+      }
+      return !!play(kind==="researcher"?"scream_b":kind==="capture"?"capture":"monster_growl");
+    });
   }
   function step() {
     const t = now();
@@ -211,7 +294,10 @@ window.Horror = (function () {
   }
   // 잡힘: 비명 같은 쇳소리 + 폭발적 잡음
   function screech() {
-    if (!ctx) return; const t = now();
+    if (!ctx) return;
+    silenceScene();
+    if(sample("capture",{gain:.78,channel:"capture"}))return;
+    const t = now();
     const dist = ctx.createWaveShaper(); const curve = new Float32Array(256);
     for (let i = 0; i < 256; i++) { const x = i / 128 - 1; curve[i] = Math.tanh(x * 6); }
     dist.curve = curve;
@@ -310,5 +396,5 @@ window.Horror = (function () {
   function setVolume(x) { vol = Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 0.9; if (master && !muted) master.gain.setTargetAtTime(vol, now(), 0.05); notify(); }
   function setAmbient(x) { amb = Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : 1; }
   function vibrate(p) { try { if (window.Options && !Options.get("vib")) return; if (navigator.vibrate) navigator.vibrate(p); } catch (e) {} }
-  return { init, resume, restart, testTone, status, onStatus, update, wrong, right, screech, scrape, bang, breath, lightsOn, whisper, siren, shatter, spark, click, setMuted, setVolume, setAmbient, vibrate, get ready() { return started && ctx.state === "running"; } };
+  return { init, resume, restart, testTone, status, onStatus, update, updateScene, silenceScene, monsterCry, researcherScream, introAttack, introEnd, preview, stopPreview, wrong, right, screech, scrape, bang, breath, lightsOn, whisper, siren, shatter, spark, click, setMuted, setVolume, setAmbient, vibrate, get ready() { return started && ctx.state === "running"; } };
 })();

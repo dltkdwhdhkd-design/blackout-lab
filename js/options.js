@@ -28,6 +28,13 @@ window.Options = (function () {
     $("opt-vib").checked = v.vib; $("opt-vib").onchange = () => { v.vib = $("opt-vib").checked; save(); if (v.vib) Horror.vibrate(60); };
     $("opt-test").onclick = () => enableSound();
     $("opt-repair").onclick = () => enableSound(true);
+    $("opt-sound-preview").onclick = async () => {
+      if (!(v.vol > 0)) { v.vol = DEF.vol; save(); }
+      Horror.setMuted(false); apply();
+      $("opt-sound-status").textContent = "소리 준비 중…";
+      const ok = await Horror.preview($("opt-sound-kind").value);
+      $("opt-sound-status").textContent = ok ? "미리듣기를 재생했습니다." : "소리를 불러오지 못했습니다. 잠시 후 다시 눌러 주세요.";
+    };
     $("opt-reset").onclick = () => { v = { ...DEF }; save(); bind(); apply(); };
     $("opt-close").onclick = close;
   }
@@ -36,6 +43,6 @@ window.Options = (function () {
     if (document.pointerLockElement) document.exitPointerLock();
     bind(); $("options").style.display = "flex";
   }
-  function close() { open = false; $("options").style.display = "none"; if (onClose) onClose(); }
+  function close() { Horror.stopPreview(); open = false; $("options").style.display = "none"; if (onClose) onClose(); }
   return { get, apply, show, close, enableSound, get isOpen() { return open; } };
 })();

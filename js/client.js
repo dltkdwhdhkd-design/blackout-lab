@@ -48,7 +48,7 @@ window.Client = (function () {
     if (settings && settings.intro && (!opts.snapshot || opts.snapshot.it > 0)) beginIntro(); else { gore = true; showToast("정전이다. 실험실 단말기에서 에너지 셀을 회수해 발전기를 돌려라. 그것이 건물 안에 있다.", 6); }
     if (opts.snapshot) restore(opts.snapshot, opts.playerState);
   }
-  function stop() { running = false; cancelAnimationFrame(raf); resetControls(); if (document.pointerLockElement) document.exitPointerLock(); Horror.siren(false); }
+  function stop() { running = false; cancelAnimationFrame(raf); resetControls(); if (document.pointerLockElement) document.exitPointerLock(); Horror.siren(false); Horror.silenceScene(); Horror.introEnd(); }
   function resetControls() {
     keys = {}; input.fwd = input.strafe = 0; holdRev = false; moving = false; resetTouch();
   }
@@ -61,7 +61,7 @@ window.Client = (function () {
   }
   function setConnectionLost(lost) {
     connectionReady = !lost;
-    if (lost) { resetControls(); closeModal(); mapOpen = false; if (document.pointerLockElement) document.exitPointerLock(); }
+    if (lost) { Horror.silenceScene(); resetControls(); closeModal(); mapOpen = false; if (document.pointerLockElement) document.exitPointerLock(); }
   }
   function restore(snapshot, playerState) {
     resetControls(); closeModal(); mapOpen = false; finishScare(); stairPending = null;
@@ -77,7 +77,7 @@ window.Client = (function () {
       else {
         const elapsed = Math.max(0, 15 - snapshot.it);
         intro.t0 = performance.now() - elapsed * 1000;
-        for (const [key, t] of Object.entries({ alarm: 3, bang: 5, kill1: 6.4, shatter1: 7, kill2: 8.8, shatter2: 9.2, shatter3: 10.2, lunge: 11.5 })) if (elapsed > t) intro.done[key] = true;
+        for (const [key, t] of Object.entries({ alarm: 3, panic: 4.65, bang: 5, kill1: 6.4, shatter1: 7, kill2: 8.8, shatter2: 9.2, shatter3: 10.2, lunge: 11.5 })) if (elapsed > t) intro.done[key] = true;
       }
     }
     connectionReady = true; lastPos = performance.now();
@@ -247,9 +247,9 @@ window.Client = (function () {
       case "cctv": Horror.right(); if (e.id === me && modal) modalResult(true); showToast(`CCTV 접속 — ${e.secs}초 동안 괴물과 남은 장비 위치가 화면 위에 보인다.`, 4); break;
       case "cctvon": if (e.id === me) showToast(`CCTV는 이미 켜져 있다 (${e.left}초 남음).`, 2); break;
       case "cool": if (e.id === me) showToast(`잠겨 있다. ${e.left}초 뒤 다시.`, 2); break;
-      case "wake2": Horror.bang(); Horror.vibrate([100,80,200]); fx.shake=0.5; showToast(`셀 ${e.threshold}개 회수 — 2층에서 두 번째 개체가 출현했다. 계단을 조심해.`,7); break;
+      case "wake2": Horror.monsterCry("wake",.55); Horror.vibrate([100,80,200]); fx.shake=0.5; showToast(`셀 ${e.threshold}개 회수 — 2층에서 두 번째 개체가 출현했다. 계단을 조심해.`,7); break;
       case "stairs": if(e.id===me)showToast(`${e.floor}층으로 이동했다.`,2);break;
-      case "wake": Horror.bang(); fx.shake = 1; showToast("…건물 어딘가에서 무언가가 깨어났다.", 4); Horror.vibrate([80, 60, 200]); break;
+      case "wake": Horror.monsterCry("wake",-.45); fx.shake = 1; showToast("…건물 어딘가에서 무언가가 깨어났다.", 4); Horror.vibrate([80, 60, 200]); break;
       case "hunt": Horror.scrape(); break;
       case "light":
         if (e.id === me) {
@@ -257,12 +257,18 @@ window.Client = (function () {
           showToast(e.locker ? "…새어 나간 빛을 봤다. 무언가 사물함 쪽으로 온다." : "…빛을 봤다. 무언가 이쪽으로 온다. 손전등을 꺼라.", 3);
         }
         break;
-      case "spotted": if (e.id === me) { fx.spotted = 1; Horror.scrape(); Horror.vibrate([60, 40, 60, 40, 200]); showToast("들켰다. 뛰어.", 2); } break;
-      case "caught": if (e.id === me) jumpScare(); else { Horror.bang(); showToast(`${e.name}이(가) 쓰러졌다. 찾아가서 구해야 한다.`, 4); fx.shake = 0.6; } break;
+      case "spotted": if (e.id === me) { fx.spotted = 1; Horror.monsterCry("spotted"); Horror.vibrate([60, 40, 60, 40, 200]); showToast("들켰다. 뛰어.", 2); } break;
+      case "caught": if (e.id === me) jumpScare(); else {
+        const victim=others.get(e.id);
+        if(victim&&MapUtil.sameFloor(pos,victim)){
+          const dx=victim.x-pos.x,dy=victim.y-pos.y,d=Math.hypot(dx,dy),pan=(Math.cos(pos.a+Math.PI/2)*dx+Math.sin(pos.a+Math.PI/2)*dy)/Math.max(1,d);
+          if(d<22)Horror.researcherScream(0,pan,.5*(1-d/22)*(MapUtil.los(pos.x,pos.y,victim.x,victim.y)?1:.4),"effect");
+        }
+        showToast(`${e.name}이(가) 쓰러졌다. 찾아가서 구해야 한다.`, 4); fx.shake = 0.6; } break;
       case "revived": if (e.id === me) { clearInteraction(); finishScare(); down = false; fx.fade = 1; showToast(e.self ? "정신이 돌아왔다." : "팀원이 깨워 줬다.", 3); } else showToast(`${names[e.id] || "팀원"}이(가) 일어났다.`, 2); break;
       case "exit": Horror.right(); showToast("발전기 가동! 보안 출구가 열렸다. 남동쪽 끝, 보안 출구로.", 5); break;
       case "escaped": if (e.id === me) { escaped = true; Horror.lightsOn(); } else showToast(`${e.name} 탈출 성공`, 2.5); break;
-      case "end": phase = "end"; if (!endDelivered) { endDelivered = true; if (onEnd) onEnd(e); } break;
+      case "end": Horror.silenceScene(); phase = "end"; if (!endDelivered) { endDelivered = true; if (onEnd) onEnd(e); } break;
     }
   }
 
@@ -319,7 +325,7 @@ window.Client = (function () {
     el("hud").style.visibility = "hidden"; el("btn-act").style.visibility = "hidden"; el("btn-light").style.visibility = "hidden"; el("stick").style.display = "none";
   }
   function finishIntro() {
-    intro = null; flashOn = 1; gore = true; Horror.siren(false);
+    intro = null; flashOn = 1; gore = true; Horror.siren(false); Horror.introEnd();
     restoreHud();
     showToast(`발전기를 돌려야 보안문이 열린다. 방마다 있는 장비에서 에너지 셀을 꺼내(문제) 비상 발전기실로 가져가라. 한 번에 2개까지, 모두 ${settings.requiredFuses}개. …그것은 아직 이 건물 안에 있다.`, 8);
   }
@@ -330,12 +336,13 @@ window.Client = (function () {
     if (t < 3) { I.text = "지하 3층 · 격리 연구동"; I.sub = "23:47"; }
     if (t >= 3) once("alarm", () => { Horror.siren(true); Horror.vibrate([100, 50, 100]); });
     if (t >= 3 && t < 11.5) { I.text = "⚠ 격리 실패 — 개체 K-7"; I.sub = "전 구역 봉쇄 · 보안 인력 대기"; I.red = 0.5 + 0.5 * Math.sin(t * 9); }
-    if (t >= 5) once("bang", () => { Horror.bang(); I.shake = 1.2; });
-    if (t >= 6.4) once("kill1", () => { Horror.screech(); I.shake = 1; I.flash = 0.6; });
+    if (t >= 4.65) once("panic", () => { Horror.researcherScream(1,.65,.28); });
+    if (t >= 5) once("bang", () => { Horror.monsterCry("wake",-.55); Horror.bang(); I.shake = 1.2; });
+    if (t >= 6.4) once("kill1", () => { Horror.introAttack(0,-.55); I.shake = 1; I.flash = 0.6; });
     if (S && S.it > 0) I.sawIt = true;
     if (S && S.it <= 0 && !I.sawIt && t < 13) { finishIntro(); return; } // 늦게 들어온 학생은 연출 생략
     if (t >= 7.0) once("shatter1", () => { Horror.shatter(); I.flash = 1; I.ambient = 0.6; });
-    if (t >= 8.8) once("kill2", () => { Horror.screech(); I.shake = 1.3; I.flash = 0.5; Horror.vibrate([200, 80, 300]); });
+    if (t >= 8.8) once("kill2", () => { Horror.introAttack(1,.5); I.shake = 1.3; I.flash = 0.5; Horror.vibrate([200, 80, 300]); });
     if (t >= 9.2) once("shatter2", () => { Horror.shatter(); Horror.spark(); I.flash = 1; I.ambient = 0.3; });
     if (t >= 10.2) once("shatter3", () => { Horror.shatter(); I.flash = 1; I.ambient = 0.08; Horror.siren(false); });
     if (t >= 11.5) once("lunge", () => { Horror.screech(); Horror.vibrate([500, 100, 500]); I.flash = 1.5; I.black = 1; I.text = ""; I.sub = ""; });
@@ -433,7 +440,12 @@ window.Client = (function () {
     const md = Math.hypot(mon.x - pos.x, mon.y - pos.y);
     const sees = MapUtil.los(mon.x, mon.y, pos.x, pos.y);
     const relX = Math.cos(pos.a + Math.PI / 2) * (mon.x - pos.x) + Math.sin(pos.a + Math.PI / 2) * (mon.y - pos.y);
-    Horror.update(mon.state === "sleep" ? 99 : md, relX, mon.state === "sleep" ? 0 : mon.speed, sees);
+    const soundActive=!down&&!escaped&&phase==="play";
+    Horror.update(!soundActive||mon.state === "sleep" ? 99 : md, relX, !soundActive||mon.state === "sleep" ? 0 : mon.speed, sees);
+    Horror.updateScene(soundActive?monsters.map((m,id)=>{
+      const dx=m.x-pos.x,dy=m.y-pos.y,d=Math.hypot(dx,dy);
+      return {id,dist:d,pan:(Math.cos(pos.a+Math.PI/2)*dx+Math.sin(pos.a+Math.PI/2)*dy)/Math.max(1,d),speed:m.speed,state:m.state,sees:MapUtil.los(m.x,m.y,pos.x,pos.y),sameFloor:MapUtil.sameFloor(m,pos)};
+    }).filter(m=>m.sameFloor&&!["sleep","dormant"].includes(m.state)):[]);
     fx.shake *= Math.pow(0.02, dt); fx.static *= Math.pow(0.05, dt); fx.spotted *= Math.pow(0.1, dt); fx.fade *= Math.pow(0.1, dt);
     wrongFlashT -= dt; if (toast.t > 0) toast.t -= dt;
     const near = mon.state !== "sleep" ? Math.max(0, 1 - md / 7) : 0;
