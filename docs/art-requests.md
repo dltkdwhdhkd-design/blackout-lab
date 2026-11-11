@@ -5,6 +5,7 @@
 **완료 (2026-11-11 반영):**
 - 괴물 4장(`monster_0`~`3`), 잡혔을 때 얼굴(`scare`)
 - 연구원·쓰러진 연구원·팀원·단말기·발전기 10장, 벽·사물함·출구 문 14장(피 묻은 버전 포함)
+- 방 장비 8장, 가구 20장, 셀·구급상자, 방 벽 4장 (34장, ChatGPT). 장비의 셀을 꺼낸 상태(`dev_*_e`)는 셀의 청록 빛을 지워서 자동으로 만들었습니다.
 
 지금은 모든 그림이 교사 제공 그림으로 바뀌어 있습니다. 아래 문구는 다시 뽑을 때 참고용입니다.
 
@@ -36,8 +37,8 @@
 - `img/wall.png`(실험실 흰 타일) `img/hall.png`(복도 패널) `img/contain.png`(격리실 콘크리트) `img/power.png`(설비실 금속) `img/locker.png` `img/exit_closed.png` `img/exit_open.png`, 피 묻은 버전은 이름 뒤에 `_blood`
 - 규격: 정사각형(128×128 또는 256×256), 이음새 없이 반복되는 타일. 벽 한 칸에 한 장이 세로로 1.6배 늘어나 붙습니다.
 
-## 방 장비·가구 (Higgsfield로 뽑아 넣을 것)
-기본 그림은 `js/propart.js`가 그립니다. 아래 이름으로 PNG를 넣으면 `js/assets.js`의 `PROVIDED`에 이름을 추가해 바꿉니다. 모두 **투명 배경, 정면, 물건 아래쪽이 그림 맨 아래에 닿게**.
+## 방 장비·가구
+지금은 교사 제공 그림이 들어가 있고, 파일이 없으면 `js/propart.js`가 그린 기본 그림이 나옵니다. 다시 뽑을 때는 아래 이름으로 PNG를 넣으면 `js/assets.js`의 `PROVIDED`에 이름을 추가해 바꿉니다. 모두 **투명 배경, 정면, 물건 아래쪽이 그림 맨 아래에 닿게**.
 
 공통 앞부분(그대로 붙이고 끝에 물건 설명만 바꿈):
 > Single game prop sprite for a dark 1990s-style first-person horror game set in an abandoned underground science research facility. Painterly digital art with a slightly rough pixel-grain texture, muted desaturated colors, cold teal-grey and dirty beige tones, lit only from the front by a flashlight so the edges fall into darkness. Straight front view at eye level, the whole object visible and centered, its base touching the bottom edge of the image. Isolated object on a fully transparent background, no floor, no wall, no cast shadow, no text, no labels, no people. The object: ...

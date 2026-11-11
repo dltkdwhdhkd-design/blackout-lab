@@ -97,8 +97,7 @@ window.Fps = (function () {
     // 셀이 꽂힌 장비: 방마다 다른 장비 그림. 셀이 남아 있으면 홈이 푸르게 빛나고 초록 등, 꺼내면 빈 홈에 빨간 등
     for (const f of st.fuses) {
       const empty = (st.fmask >> f.id) & 1, dk = window.DEVICE_KEY && DEVICE_KEY[f.room];
-      if (dk && Assets.img[dk]) { Assets.spr[dk] = Assets.img[dk]; sprites.push({ kind: dk, x: f.x + 0.5, y: f.y + 0.5, scale: 1.35, dim: !!empty }); }
-      else if (dk && Assets.spr[dk]) { sprites.push({ kind: empty ? dk + "_e" : dk, x: f.x + 0.5, y: f.y + 0.5, scale: 1.45, lit: empty ? 0.12 : 0.3 }); continue; }
+      if (dk && Assets.spr[dk]) { sprites.push({ kind: empty ? dk + "_e" : dk, x: f.x + 0.5, y: f.y + 0.5, scale: 1.45, lit: empty ? 0.12 : 0.3 }); continue; }
       else sprites.push({ kind: empty ? "console_off" : "console_on", x: f.x + 0.5, y: f.y + 0.5 });
       if (!empty) sprites.push({ kind: "it_cell", x: f.x + 0.5, y: f.y + 0.5, lift: 1.33 + 0.03 * Math.sin(st.now / 380 + f.id), scale: 0.22, glow: 0.75 });
     }

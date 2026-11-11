@@ -4,7 +4,8 @@ window.Assets = (function () {
   const PROVIDED = ["monster_0", "monster_1", "monster_2", "monster_3", "scare",
     "body", "body2", "console_off", "console_on", "generator", "generator_on", "mate", "mate_down", "researcher", "researcher_run",
     "wall", "wall_blood", "hall", "hall_blood", "contain", "contain_blood", "power", "power_blood",
-    "locker", "locker_blood", "exit_closed", "exit_closed_blood", "exit_open", "exit_open_blood"];
+    "locker", "locker_blood", "exit_closed", "exit_closed_blood", "exit_open", "exit_open_blood",
+    "dev_bio", "dev_bio_e", "dev_chem", "dev_chem_e", "dev_earth", "dev_earth_e", "dev_heat", "dev_heat_e", "dev_medical", "dev_medical_e", "dev_monitor", "dev_monitor_e", "dev_phy", "dev_phy_e", "dev_server", "dev_server_e", "it_cell", "it_medkit", "p_bed", "p_bench", "p_bookshelf", "p_cafe", "p_cctv", "p_desk", "p_gate", "p_hood", "p_hotplate", "p_machine", "p_medcab", "p_meeting", "p_microscope", "p_physbench", "p_rack", "p_reception", "p_rockshelf", "p_shelf", "p_sofa", "p_vending", "room_archive", "room_medical", "room_monitor", "room_server"];
   const TEX_NAMES = ["wall", "wall_blood", "hall", "hall_blood", "contain", "contain_blood", "power", "power_blood",
     "locker", "locker_blood", "exit_closed", "exit_closed_blood", "exit_open", "exit_open_blood"];
   const TEX = 64;
@@ -265,7 +266,7 @@ window.Assets = (function () {
     if (window.PropArt && window.PROPS) {
       for (const ch in PROPS) { const k = PROPS[ch].key; spr[k] = PropArt.make(k); if (has(k)) tryImage(k, im => { spr[k] = im; }); }
       for (const k of ["it_cell", "it_medkit"]) { spr[k] = PropArt.make(k); if (has(k)) tryImage(k, im => { spr[k] = im; }); }
-      for (const k of Object.values(DEVICE_KEY)) { spr[k] = PropArt.make(k); spr[k + "_e"] = PropArt.make(k + "_e"); if (has(k)) tryImage(k, im => { img[k] = im; }); }
+      for (const k of Object.values(DEVICE_KEY)) for (const v of [k, k + "_e"]) { spr[v] = PropArt.make(v); if (has(v)) tryImage(v, im => { spr[v] = im; }); }   // 장비: 셀 있음 / 꺼낸 뒤
       for (const k of Object.values(ROOM_WALL)) { tex[k] = PropArt.wall(k); if (has(k)) tryImage(k, im => { tex[k] = im; }); }
     }
   }
