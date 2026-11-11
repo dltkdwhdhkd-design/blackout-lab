@@ -1,0 +1,29 @@
+name: Fetch Higgsfield art
+# art/higgsfield.json 에 그림 주소를 올리면 GitHub 서버가 받아서 img/ 에 넣고 다시 배포한다
+on:
+  push:
+    branches: [main]
+    paths: [art/higgsfield.json]
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pillow
+      - run: python3 tools/fetch_art.py
+      - name: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add img js/assets.js
+          git diff --cached --quiet && exit 0
+          git commit -m "Higgsfield 그림 받아 넣기"
+          git push
+      - name: redeploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main
