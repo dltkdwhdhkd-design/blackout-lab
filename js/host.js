@@ -31,6 +31,7 @@ window.HostView = (function () {
     });
   }
   function drawWorld(w, x, y, wd, ht, idx) {
+    if (w.mapState) MapUtil.use(w.mapState);
     const floor=MapUtil.floorInfo(selectedFloor),height=floor.y1-floor.y0+1;
     const T = Math.min(wd / MAP_W, (ht-22) / height);
     const ox = x + (wd - T * MAP_W) / 2, oy = y+22 + (ht-22 - T * height) / 2 - floor.y0*T;

@@ -205,6 +205,7 @@ window.MapUtil = (function () {
   const CLASSIC = { rows: MAP_ROWS, rooms: ROOMS, intro: INTRO, seed: 0 };
   let floors = [{id:1,name:"1층",y0:0,y1:MAP_H-1}], stairs = [], stairIndex = new Map(), tileIndex = {}, roomIndex = [];
   function load(m) {
+    cur = null;
     if (!m) m = CLASSIC;
     if (window.Building) m = Building.expand(m);
     window.MAP_ROWS = m.rows; window.MAP_W = m.rows[0].length; window.MAP_H = m.rows.length;
@@ -228,6 +229,14 @@ window.MapUtil = (function () {
   function randomFloor(rng) {
     return floorTiles[Math.floor((rng || Math.random)() * floorTiles.length)];
   }
+  // 팀마다 다른 지도: 불러 둔 지도 상태를 통째로 저장했다가 순간 교체한다 (교사 기기에서 팀별 계산 전에)
+  let cur = null;
+  function state() { cur = { rows: window.MAP_ROWS, W: MAP_W, H: MAP_H, rooms: ROOMS, intro: INTRO, meds: window.MEDKITS, grid, seed, floors, stairs, stairIndex, tileIndex, roomIndex, floorTiles, propList }; return cur; }
+  function use(st) {
+    if (!st || st === cur) return; cur = st;
+    window.MAP_ROWS = st.rows; window.MAP_W = st.W; window.MAP_H = st.H; window.ROOMS = st.rooms; window.INTRO = st.intro; window.MEDKITS = st.meds;
+    grid = st.grid; seed = st.seed; floors = st.floors; stairs = st.stairs; stairIndex = st.stairIndex; tileIndex = st.tileIndex; roomIndex = st.roomIndex; floorTiles = st.floorTiles; propList = st.propList;
+  }
   load(null);
-  return { floorAt, sameFloor, floorInfo, stairAt, nearStair, get floors() { return floors; }, get stairs() { return stairs; }, tile, solid, solidFor, opaque, roomAt, find, fuses, bfs, los, move, hits, randomFloor, load, isProp, get props() { return propList; }, get grid() { return grid; }, get seed() { return seed; } };
+  return { state, use, floorAt, sameFloor, floorInfo, stairAt, nearStair, get floors() { return floors; }, get stairs() { return stairs; }, tile, solid, solidFor, opaque, roomAt, find, fuses, bfs, los, move, hits, randomFloor, load, isProp, get props() { return propList; }, get grid() { return grid; }, get seed() { return seed; } };
 })();

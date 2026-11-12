@@ -21,8 +21,8 @@
           if (this.started) {
             // 늦게 들어온 학생: 가장 적은 팀에
             let best = 0; this.worlds.forEach((w, i) => { if (w.players.size < this.worlds[best].players.size) best = i; });
-            if (!this.worlds.length) { this.worlds.push(Sim.createWorld(0, this.settings)); HostView.init(this.worlds, this.names()); }
-            const p = this.players.get(from); p.team = best; Sim.addPlayer(this.worlds[best], from, p.name);
+            if (!this.worlds.length) { const w0 = Sim.createWorld(0, this.settings); w0.seed = MapUtil.seed; w0.mapState = MapUtil.state(); this.worlds.push(w0); HostView.init(this.worlds, this.names()); }
+            const p = this.players.get(from); p.team = best; MapUtil.use(this.worlds[best].mapState); Sim.addPlayer(this.worlds[best], from, p.name);
             Net.sendToClients({ t: "roster", players: this.lobbyMsg().players });
           } else this.assignTeams();
         }
@@ -35,7 +35,7 @@
         return;
       }
       const p = this.players.get(from); if (!p || !this.started) return;
-      const w = this.worlds[p.team]; if (w) Sim.handle(w, from, d);
+      const w = this.worlds[p.team]; if (w) { MapUtil.use(w.mapState); Sim.handle(w, from, d); }
     },
     names() { const o = {}; for (const p of this.players.values()) o[p.id] = p.name; return o; },
     assignTeams(all) {
@@ -78,17 +78,25 @@
     broadcastLobby() { Net.sendToClients(this.lobbyMsg()); renderHostLobby(); },
     start() {
       this.started = true;
-      // 지도: 매판 새로 (번호로 모든 기기가 같은 지도를 만든다) 또는 기본 지도
+      // 지도: 0 기본 지도 고정 / 1 매판 새로(모든 팀 같은 지도) / 2 매판 새로·팀마다 다른 지도
       window.BL_REQ = this.settings.requiredFuses;   // 1층 장비 수가 필요 셀 수에 따라 달라진다
-      if (this.settings.mapMode === 0) { this.settings.seed = 0; MapUtil.load(null); }
-      else { let m = null; while (!m) { this.settings.seed = 1 + Math.floor(Math.random() * 999998); m = MapGen.generate(this.settings.seed); } MapUtil.load(m); }
-      const cm = document.getElementById("console-map"); if (cm) cm.textContent = this.settings.seed ? "#" + this.settings.seed : "기본";
+      const newSeed = () => { let sd, m = null; while (!m) { sd = 1 + Math.floor(Math.random() * 999998); m = MapGen.generate(sd); } MapUtil.load(m); return sd; };
       this.compactTeams();
       const nTeams = Math.max(1, ...[...this.players.values()].map(p => p.team + 1));
       this.worlds = [];
       let recent = []; try { recent = JSON.parse(localStorage.getItem("blackoutlab.recentQ") || "[]"); } catch (e) {}
-      for (let i = 0; i < nTeams; i++) { const w = Sim.createWorld(i, this.settings); w.avoid = new Set(recent); this.worlds.push(w); }
-      for (const p of this.players.values()) Sim.addPlayer(this.worlds[p.team], p.id, p.name);
+      let shared = null;
+      for (let i = 0; i < nTeams; i++) {
+        let sd;
+        if (this.settings.mapMode === 0) { sd = 0; if (!shared) { MapUtil.load(null); shared = MapUtil.state(); } else MapUtil.use(shared); }
+        else if (this.settings.mapMode === 1) { if (!shared) { sd = newSeed(); shared = MapUtil.state(); } else { sd = shared.seed; MapUtil.use(shared); } }
+        else sd = newSeed();
+        const ms = this.settings.mapMode === 2 ? MapUtil.state() : shared;
+        const w = Sim.createWorld(i, this.settings); w.avoid = new Set(recent); w.seed = sd; w.mapState = ms; this.worlds.push(w);
+      }
+      this.settings.seed = this.worlds[0].seed;
+      for (const p of this.players.values()) { MapUtil.use(this.worlds[p.team].mapState); Sim.addPlayer(this.worlds[p.team], p.id, p.name); }
+      const cm = document.getElementById("console-map"); if (cm) cm.textContent = this.worlds.map((w, i) => (this.worlds.length > 1 ? `${i + 1}팀 ` : "") + (w.seed ? "#" + w.seed : "기본")).join(" · ");
       HostView.init(this.worlds, this.names());
       this.sendGo();
       this.lastTick = performance.now();
@@ -98,15 +106,16 @@
       const players = this.lobbyMsg().players;
       for (const p of this.players.values()) {
         if (to && p.id !== to) continue;
-        const w = this.worlds[p.team];
+        const w = this.worlds[p.team]; MapUtil.use(w.mapState);
         // /h로 보내므로 팀 구독이 아직 끝나지 않은 재접속도 첫 상태를 받는다.
-        Net.sendToClients({ t: "go", to: p.id, requestId, move: !!move, roomId: Net.id, settings: this.settings, players, snapshot: Sim.snapshot(w), playerState: Sim.resumeState(w, p.id) });
+        Net.sendToClients({ t: "go", to: p.id, requestId, move: !!move, roomId: Net.id, settings: { ...this.settings, seed: w.seed }, players, snapshot: Sim.snapshot(w), playerState: Sim.resumeState(w, p.id) });
       }
     },
     loop() {
       const now = performance.now(); let dt = (now - this.lastTick) / 1000; this.lastTick = now;
       if (dt > 1) dt = 0.05; // 탭이 숨겨졌다 돌아옴
       for (const w of this.worlds) {
+        MapUtil.use(w.mapState);
         Sim.tick(w, dt);
         for (const e of w.events) {
           if (e.k === "q") rememberQ(e.unit + ":" + e.qi);
@@ -116,7 +125,7 @@
         w.events.length = 0;
       }
       this.snapAcc += dt;
-      if (this.snapAcc >= 0.1) { this.snapAcc = 0; for (const w of this.worlds) Net.sendToClients(Sim.snapshot(w), w.team); }
+      if (this.snapAcc >= 0.1) { this.snapAcc = 0; for (const w of this.worlds) { MapUtil.use(w.mapState); Net.sendToClients(Sim.snapshot(w), w.team); } }
       HostView.render();
       if (this.worlds.length && this.worlds.every(w => w.phase === "end")) $("btn-host-end").textContent = "결과 보기";
     },

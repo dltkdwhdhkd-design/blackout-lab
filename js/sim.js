@@ -2,7 +2,7 @@
 window.Sim = (function () {
   const PLAYER_SPEED = 3.0;
   const INTRO_LEN = 15;
-  const DEFAULTS = { timeLimit: 1200, monsterCount: 2, safeTime: 75, monsterSpeed: 1.0, requiredFuses: 9, teamSize: 4, scare: 2, intro: 1, mapMode: 1 };
+  const DEFAULTS = { timeLimit: 1200, monsterCount: 2, safeTime: 75, monsterSpeed: 1.0, requiredFuses: 9, teamSize: 4, scare: 2, intro: 1, mapMode: 2 };
 
   function createWorld(team, settings) {
     const mf = MapUtil.find("M")[0];
