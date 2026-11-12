@@ -235,7 +235,9 @@ window.Sim = (function () {
         const d = Math.hypot(p.x - mo.x, p.y - mo.y);
         if (p.hid) {
           // 숨는 걸 봤거나, 지금도 틈으로 불빛이 새고 있으면 바로 앞에서 끌어낸다
-          if ((p.seenHide || p.light) && d < 1.3) { catchPlayer(w, p, mo); return; }
+          // 거리는 사물함 자리로 잰다 (숨기 전 서 있던 자리가 괴물이 온 쪽과 다를 수 있음)
+          const dl = Math.hypot(p.hid.x + 0.5 - mo.x, p.hid.y + 0.5 - mo.y);
+          if ((p.seenHide || p.light) && dl < 1.6) { catchPlayer(w, p, mo); return; }
           // 사물함 안에서 손전등을 켜 두면 틈으로 빛이 샌다
           if (p.light && d < 10) { const spot = lockerFront(mo, p.hid); if (spot && d < ld) { ld = d; lit = { p, x: spot.x, y: spot.y, locker: true }; } }
           continue;
