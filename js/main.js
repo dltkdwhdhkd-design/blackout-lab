@@ -60,22 +60,8 @@
       }
     },
     moveTeam(id, team) {
-      const p = this.players.get(id); if (!p) return;
-      if (this.started) { this.moveLive(id, team); return; }
+      const p = this.players.get(id); if (!p || this.started) return;
       p.team = Math.max(0, team); this.broadcastLobby();
-    },
-    // 게임 중 팀 이동: 원래 팀에서 빼고(들던 셀은 떨어뜨림) 새 팀의 시작 지점에서 다시 시작
-    moveLive(id, team) {
-      const p = this.players.get(id), from = this.worlds[p.team], to = this.worlds[team];
-      if (!from || !to || from === to || to.phase !== "play") return;
-      const old = Sim.removePlayer(from, id);
-      Sim.addPlayer(to, id, p.name);
-      to.players.get(id).travelRev = ((old && old.travelRev) || 0) + 1;   // 옮기기 전 위치 신호가 늦게 와도 무시되게
-      const was = p.team; p.team = team;
-      HostView.addLog(team, `${p.name} 합류 (${was + 1}팀에서 이동)`); HostView.addLog(was, `${p.name} → ${team + 1}팀으로 이동`);
-      Net.sendToClients({ t: "roster", players: this.lobbyMsg().players });
-      this.sendGo(id, null, true);
-      renderConsoleTeams();
     },
     // 대기실에서 내보내기: 목록에서 빼고 그 학생 화면을 입장 화면으로 돌려보낸다(다시 들어오는 건 가능)
     kick(id) {
@@ -159,20 +145,6 @@
     if (txt) HostView.addLog(w.team, txt);
   }
 
-  // 관제 화면의 팀 이동 패널
-  function renderConsoleTeams() {
-    const box = $("console-teams"); if (!box || box.style.display === "none") return;
-    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-    const ws = HostGame.worlds;
-    const opt = cur => ws.map((w, t) => `<option value="${t}"${t === cur ? " selected" : ""}${w.phase !== "play" && t !== cur ? " disabled" : ""}>${t + 1}팀${w.phase !== "play" ? "(끝남)" : ""}</option>`).join("");
-    box.innerHTML = `<div class="ct-head"><b>팀 이동</b> <span class="muted small">옮기면 새 팀 시작 지점에서 다시 시작합니다. 들고 있던 셀은 원래 자리에 떨어집니다.</span> <button id="btn-ct-close">닫기</button></div><div class="teams">` +
-      ws.map((w, t) => `<div class="team"><b>${t + 1}팀</b> <span class="muted">${w.players.size}명</span><div class="team-list">${[...w.players.values()].map(p => `<label class="mem">${esc(p.name)}${p.down ? " ✕" : p.escaped ? " ✓" : ""} <select data-id="${esc(p.id)}">${opt(t)}</select></label>`).join("")}</div></div>`).join("") + `</div>`;
-    box.querySelectorAll("select[data-id]").forEach(sel => { sel.onchange = () => HostGame.moveLive(sel.dataset.id, +sel.value); });
-    $("btn-ct-close").onclick = () => { box.style.display = "none"; };
-  }
-  window.addEventListener("DOMContentLoaded", () => {
-    const b = $("btn-console-teams"); if (b) b.onclick = () => { const box = $("console-teams"); box.style.display = box.style.display === "none" ? "" : "none"; renderConsoleTeams(); };
-  });
   function updateSecondHint() {
     const h = $("second-hint"); if (!h) return; const r = HostGame.settings.requiredFuses || 9;
     const at = r <= 6 ? Math.ceil(r * 2 / 3) : Math.ceil(r / 2);
