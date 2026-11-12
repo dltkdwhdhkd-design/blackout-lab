@@ -39,7 +39,7 @@ window.HostView = (function () {
     ctx.fillStyle = teamColors[idx % 8]; ctx.font = "bold 14px sans-serif"; ctx.textAlign = "left";
     const fixed = w.fuses.filter(f => f.fixed).length;
     const alive = [...w.players.values()];
-    const status = w.introT > 0 ? "시작 연출 중" : w.phase === "end" ? ({ escaped: "전원 탈출", partial: "일부 탈출", lost: "전멸", timeout: "시간 초과" })[w.result] : `${fmt(w.time)} · 발전기 ${w.inserted}/${w.settings.requiredFuses} · 꺼낸 셀 ${fixed}${w.cctv && w.elapsed < w.cctv.until ? " · CCTV" : ""}${w.exitOpen ? " · 출구 열림" : ""}`;
+    const status = w.introT > 0 ? "시작 연출 중" : w.phase === "end" ? ({ escaped: "전원 탈출", partial: "일부 탈출", lost: "전멸", timeout: "시간 초과", empty: "전원 다른 팀으로 이동" })[w.result] : `${fmt(w.time)} · 발전기 ${w.inserted}/${w.settings.requiredFuses} · 꺼낸 셀 ${fixed}${w.cctv && w.elapsed < w.cctv.until ? " · CCTV" : ""}${w.exitOpen ? " · 출구 열림" : ""}`;
     ctx.fillText(`${idx + 1}팀 · ${selectedFloor}층  ${status}`, x, y - 8, wd);
     ctx.fillStyle = "#aaa"; ctx.font = "12px sans-serif"; ctx.textAlign = "left";
     ctx.fillText(alive.map(p => (p.escaped ? "✓" : p.down ? "✕" : "●") + p.name + `(${MapUtil.floorAt(p.x,p.y)}층)`).join("  "), x, y+8,wd);
@@ -89,7 +89,7 @@ window.HostView = (function () {
     let html = "";
     ws.forEach((w, i) => {
       const fixed = w.fuses.filter(f => f.fixed).length;
-      const res = ({ escaped: "전원 탈출", partial: "일부 탈출", lost: "전멸", timeout: "시간 초과" })[w.result] || "진행 중";
+      const res = ({ escaped: "전원 탈출", partial: "일부 탈출", lost: "전멸", timeout: "시간 초과", empty: "전원 다른 팀으로 이동" })[w.result] || "진행 중";
       html += `<section class="res-team"><h3 style="color:${teamColors[i % 8]}">${i + 1}팀 — ${res}</h3>
         <p>탈출 ${w.escaped}/${w.players.size}명 · 발전기에 넣은 셀 ${w.inserted}/${w.settings.requiredFuses} (꺼낸 셀 ${fixed}) · 오답 ${w.wrongs.length}개 · 잡힌 횟수 ${[...w.players.values()].reduce((a, p) => a + p.caught, 0)}</p>`;
       if (w.wrongs.length) {

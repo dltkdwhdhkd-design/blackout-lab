@@ -116,3 +116,13 @@ input[type=range], input[type=checkbox] { accent-color: #b52222; }
 
 .settings label { min-width:0; white-space:nowrap; }
 .settings select { min-width:0; flex:1; }
+
+.team-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.team .mem { display: inline-flex; align-items: center; gap: 4px; background: #1d1f26; border: 1px solid #2f313b; border-radius: 4px; padding: 3px 4px 3px 8px; font-size: 14px; }
+.team .mem select { background: #101116; color: #ddd; border: 1px solid #3a3c46; border-radius: 3px; font-size: 16px; padding: 1px 2px; }
+
+#console-teams { position: absolute; top: 44px; left: 0; right: 300px; max-height: 70%; overflow: auto; background: rgba(11,12,15,0.96); border-bottom: 1px solid #23242b; padding: 10px 14px; z-index: 5; }
+#console-teams .ct-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#console-teams .ct-head button { margin-left: auto; }
+@media (max-width: 800px) { #console-teams { right: 0; } }
+#console-teams .mem { white-space: nowrap; }

@@ -622,5 +622,5 @@ window.Client = (function () {
     c.fillStyle = `rgba(0,0,0,${Math.max(0, (t - 0.9) / 0.6)})`; c.fillRect(0, 0, W, H);
   }
 
-  return { start, stop, restore, setConnectionLost, setNames(value) { names = value; }, onMessage, cancelModal, get me() { return me; }, _dbg: { pos: () => pos, set: (x, y, a) => { pos.x = x; pos.y = y; if (a !== undefined) pos.a = a; }, mon: () => mon, S: () => S, down: () => down, modal: () => modal, hidden: () => hidden } };
+  return { start, stop, restore, setConnectionLost, setNames(value) { names = value; }, setTeam(t) { team = t; S = null; others.clear(); monsters = [mon]; }, onMessage, cancelModal, get me() { return me; }, _dbg: { pos: () => pos, set: (x, y, a) => { pos.x = x; pos.y = y; if (a !== undefined) pos.a = a; }, mon: () => mon, S: () => S, down: () => down, modal: () => modal, hidden: () => hidden } };
 })();

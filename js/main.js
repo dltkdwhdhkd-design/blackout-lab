@@ -38,10 +38,37 @@
       const w = this.worlds[p.team]; if (w) Sim.handle(w, from, d);
     },
     names() { const o = {}; for (const p of this.players.values()) o[p.id] = p.name; return o; },
-    assignTeams(shuffle) {
-      const list = [...this.players.values()];
-      if (shuffle) list.sort(() => Math.random() - 0.5);
-      list.forEach((p, i) => p.team = Math.floor(i / this.settings.teamSize));
+    assignTeams(all) {
+      // all: 팀 인원 설정을 바꿨을 때 전원 다시 나눔. 아니면 새로 들어온 학생만 자리가 남는 팀에 넣는다(선생님이 옮긴 팀은 그대로).
+      const list = [...this.players.values()], size = this.settings.teamSize;
+      if (all) { list.forEach((p, i) => p.team = Math.floor(i / size)); return; }
+      for (const p of list) {
+        if (p.team >= 0) continue;
+        let t = 0; while (list.filter(q => q.team === t).length >= size) t++;
+        p.team = t;
+      }
+    },
+    moveTeam(id, team) {
+      const p = this.players.get(id); if (!p) return;
+      if (this.started) { this.moveLive(id, team); return; }
+      p.team = Math.max(0, team); this.broadcastLobby();
+    },
+    // 게임 중 팀 이동: 원래 팀에서 빼고(들던 셀은 떨어뜨림) 새 팀의 시작 지점에서 다시 시작
+    moveLive(id, team) {
+      const p = this.players.get(id), from = this.worlds[p.team], to = this.worlds[team];
+      if (!from || !to || from === to || to.phase !== "play") return;
+      const old = Sim.removePlayer(from, id);
+      Sim.addPlayer(to, id, p.name);
+      to.players.get(id).travelRev = ((old && old.travelRev) || 0) + 1;   // 옮기기 전 위치 신호가 늦게 와도 무시되게
+      const was = p.team; p.team = team;
+      HostView.addLog(team, `${p.name} 합류 (${was + 1}팀에서 이동)`); HostView.addLog(was, `${p.name} → ${team + 1}팀으로 이동`);
+      Net.sendToClients({ t: "roster", players: this.lobbyMsg().players });
+      this.sendGo(id, null, true);
+      renderConsoleTeams();
+    },
+    compactTeams() { // 빈 팀 번호를 당겨서 1팀부터 차례로
+      const used = [...new Set([...this.players.values()].map(p => p.team))].sort((a, b) => a - b);
+      for (const p of this.players.values()) p.team = used.indexOf(p.team);
     },
     lobbyMsg() { return { t: "lobby", roomId: Net.id, players: [...this.players.values()].map(p => [p.id, p.name, p.team]), settings: this.settings }; },
     broadcastLobby() { Net.sendToClients(this.lobbyMsg()); renderHostLobby(); },
@@ -52,6 +79,7 @@
       if (this.settings.mapMode === 0) { this.settings.seed = 0; MapUtil.load(null); }
       else { let m = null; while (!m) { this.settings.seed = 1 + Math.floor(Math.random() * 999998); m = MapGen.generate(this.settings.seed); } MapUtil.load(m); }
       const cm = document.getElementById("console-map"); if (cm) cm.textContent = this.settings.seed ? "#" + this.settings.seed : "기본";
+      this.compactTeams();
       const nTeams = Math.max(1, ...[...this.players.values()].map(p => p.team + 1));
       this.worlds = [];
       let recent = []; try { recent = JSON.parse(localStorage.getItem("blackoutlab.recentQ") || "[]"); } catch (e) {}
@@ -62,13 +90,13 @@
       this.lastTick = performance.now();
       this.timer = setInterval(() => this.loop(), 50);
     },
-    sendGo(to, requestId) {
+    sendGo(to, requestId, move) {
       const players = this.lobbyMsg().players;
       for (const p of this.players.values()) {
         if (to && p.id !== to) continue;
         const w = this.worlds[p.team];
         // /h로 보내므로 팀 구독이 아직 끝나지 않은 재접속도 첫 상태를 받는다.
-        Net.sendToClients({ t: "go", to: p.id, requestId, roomId: Net.id, settings: this.settings, players, snapshot: Sim.snapshot(w), playerState: Sim.resumeState(w, p.id) });
+        Net.sendToClients({ t: "go", to: p.id, requestId, move: !!move, roomId: Net.id, settings: this.settings, players, snapshot: Sim.snapshot(w), playerState: Sim.resumeState(w, p.id) });
       }
     },
     loop() {
@@ -113,11 +141,32 @@
     if (txt) HostView.addLog(w.team, txt);
   }
 
+  // 관제 화면의 팀 이동 패널
+  function renderConsoleTeams() {
+    const box = $("console-teams"); if (!box || box.style.display === "none") return;
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const ws = HostGame.worlds;
+    const opt = cur => ws.map((w, t) => `<option value="${t}"${t === cur ? " selected" : ""}${w.phase !== "play" && t !== cur ? " disabled" : ""}>${t + 1}팀${w.phase !== "play" ? "(끝남)" : ""}</option>`).join("");
+    box.innerHTML = `<div class="ct-head"><b>팀 이동</b> <span class="muted small">옮기면 새 팀 시작 지점에서 다시 시작합니다. 들고 있던 셀은 원래 자리에 떨어집니다.</span> <button id="btn-ct-close">닫기</button></div><div class="teams">` +
+      ws.map((w, t) => `<div class="team"><b>${t + 1}팀</b> <span class="muted">${w.players.size}명</span><div class="team-list">${[...w.players.values()].map(p => `<label class="mem">${esc(p.name)}${p.down ? " ✕" : p.escaped ? " ✓" : ""} <select data-id="${esc(p.id)}">${opt(t)}</select></label>`).join("")}</div></div>`).join("") + `</div>`;
+    box.querySelectorAll("select[data-id]").forEach(sel => { sel.onchange = () => HostGame.moveLive(sel.dataset.id, +sel.value); });
+    $("btn-ct-close").onclick = () => { box.style.display = "none"; };
+  }
+  window.addEventListener("DOMContentLoaded", () => {
+    const b = $("btn-console-teams"); if (b) b.onclick = () => { const box = $("console-teams"); box.style.display = box.style.display === "none" ? "" : "none"; renderConsoleTeams(); };
+  });
+  let lastLobbyHtml = null;
   function renderHostLobby() {
     const byTeam = {};
-    for (const p of HostGame.players.values()) (byTeam[p.team] = byTeam[p.team] || []).push(p.name);
+    for (const p of HostGame.players.values()) (byTeam[p.team] = byTeam[p.team] || []).push(p);
     const keys = Object.keys(byTeam).sort((a, b) => a - b);
-    $("lobby-teams").innerHTML = keys.length ? keys.map(k => `<div class="team"><b>${+k + 1}팀</b> ${byTeam[k].join(", ")}</div>`).join("") : `<div class="muted">학생들이 접속하면 여기에 보입니다.</div>`;
+    const nT = keys.length ? Math.max(...keys.map(Number)) + 1 : 1;
+    const opt = (cur) => Array.from({ length: nT + 1 }, (_, t) => `<option value="${t}"${t === cur ? " selected" : ""}>${t < nT ? t + 1 + "팀" : "새 팀"}</option>`).join("");
+    const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const html = keys.length ? keys.map(k => `<div class="team"><b>${+k + 1}팀</b> <span class="muted">${byTeam[k].length}명</span><div class="team-list">${byTeam[k].map(p => `<label class="mem">${esc(p.name)} <select data-id="${esc(p.id)}">${opt(+k)}</select></label>`).join("")}</div></div>`).join("") : `<div class="muted">학생들이 접속하면 여기에 보입니다.</div>`;
+    if (html === lastLobbyHtml) { $("lobby-count").textContent = HostGame.players.size + "명"; return; }  // 고르는 중에 목록이 다시 그려져 닫히지 않게
+    lastLobbyHtml = html; $("lobby-teams").innerHTML = html;
+    $("lobby-teams").querySelectorAll("select[data-id]").forEach(sel => { sel.onchange = () => HostGame.moveTeam(sel.dataset.id, +sel.value); });
     $("lobby-count").textContent = HostGame.players.size + "명";
   }
 
@@ -150,7 +199,7 @@
     for (const id in map) {
       const el = $(id); const [key, mul] = map[id];
       el.value = HostGame.settings[key] / mul;
-      el.oninput = () => { HostGame.settings[key] = +el.value * mul; if (key === "teamSize") { HostGame.assignTeams(); renderHostLobby(); } $(id + "-v") && ($(id + "-v").textContent = el.value); };
+      el.oninput = () => { HostGame.settings[key] = +el.value * mul; if (key === "teamSize") { HostGame.assignTeams(true); HostGame.broadcastLobby(); } $(id + "-v") && ($(id + "-v").textContent = el.value); };
       $(id + "-v") && ($(id + "-v").textContent = el.value);
     }
   }
@@ -271,7 +320,8 @@
       if (syncRequest && d.requestId && d.requestId !== syncRequest) return;
       const names = {}; d.players.forEach(p => names[p[0]] = p[1]);
       Client.setNames(names);
-      if (gameStarted && !syncRequest && !recovering) return;
+      if (gameStarted && !syncRequest && !recovering && !d.move) return;
+      if (d.move && gameStarted) { myTeam = mine[2]; Net.setTeam(myTeam); Client.setTeam(myTeam); Client.restore(d.snapshot, d.playerState); lastHostAt = Date.now(); return; }
       joined = true; lastHostAt = Date.now(); myTeam = mine[2]; Net.setTeam(myTeam);
       if (activeSession && !activeSession.roomId) { activeSession.roomId = from || d.roomId; saveSession(); }
       if (!d.snapshot || !d.playerState) {

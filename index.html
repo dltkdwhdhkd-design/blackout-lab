@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="format-detection" content="telephone=no">
 <title>BLACKOUT LAB — 정전</title>
-<link rel="stylesheet" href="css/style.css?v=20261112-floorcells">
+<link rel="stylesheet" href="css/style.css?v=20261112-teammove">
 </head>
 <body>
 
@@ -146,10 +146,12 @@
   <div id="console-top">
     <span>관제실 · 방 <b id="console-code"></b> · 지도 <b id="console-map"></b></span>
     <span id="console-net" class="muted small"></span>
+    <button id="btn-console-teams">팀 이동</button>
     <button id="btn-host-end" class="danger">게임 종료</button>
   </div>
   <div id="host-floors"><button id="host-floor-1" class="primary">1층</button><button id="host-floor-2">2층</button></div>
   <canvas id="host-canvas"></canvas>
+  <div id="console-teams" style="display:none"></div>
   <div id="host-log"></div>
 </section>
 
@@ -166,20 +168,20 @@
 <script src="lib/peerjs.min.js"></script>
 <script src="js/questions.js"></script>
 <script src="js/props.js"></script>
-<script src="js/map.js?v=20261112-floorcells"></script>
+<script src="js/map.js?v=20261112-teammove"></script>
 <script src="js/mapgen.js"></script>
-<script src="js/floors.js?v=20261112-floorcells"></script>
-<script src="js/net.js?v=20261112-floorcells"></script>
-<script src="js/soundbank.js?v=20261112-floorcells"></script>
-<script src="js/audio.js?v=20261112-floorcells"></script>
-<script src="js/options.js?v=20261112-floorcells"></script>
+<script src="js/floors.js?v=20261112-teammove"></script>
+<script src="js/net.js?v=20261112-teammove"></script>
+<script src="js/soundbank.js?v=20261112-teammove"></script>
+<script src="js/audio.js?v=20261112-teammove"></script>
+<script src="js/options.js?v=20261112-teammove"></script>
 <script src="js/propart.js"></script>
 <script src="js/assets.js"></script>
-<script src="js/fps.js?v=20261112-floorcells"></script>
+<script src="js/fps.js?v=20261112-teammove"></script>
 <script src="js/hand.js"></script>
-<script src="js/sim.js?v=20261112-floorcells"></script>
-<script src="js/client.js?v=20261112-floorcells"></script>
-<script src="js/host.js?v=20261112-floorcells"></script>
-<script src="js/main.js?v=20261112-floorcells"></script>
+<script src="js/sim.js?v=20261112-teammove"></script>
+<script src="js/client.js?v=20261112-teammove"></script>
+<script src="js/host.js?v=20261112-teammove"></script>
+<script src="js/main.js?v=20261112-teammove"></script>
 </body>
 </html>

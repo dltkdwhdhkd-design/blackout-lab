@@ -372,6 +372,18 @@ window.Sim = (function () {
     }
     p.hid = null; p.hidePrev = null; p.seenHide = false;
   }
+  // 선생님이 게임 중에 다른 팀으로 옮길 때: 들고 있던 셀은 그 자리에 떨어뜨리고 이 세계에서 빠진다
+  function removePlayer(w, id) {
+    const p = w.players.get(id); if (!p) return null;
+    if (p.carry > 0 && !p.escaped) { w.drops.push({ id: ++w.dropSeq, x: p.x, y: p.y, n: p.carry }); emit(w, { k: "drop", id: p.id, name: p.name, n: p.carry }); }
+    clearQuestion(w, id);
+    for (const mo of w.monsters) if (mo.targetId === id) { mo.state = "search"; mo.target = mo.lastSeen || { x: mo.x, y: mo.y }; mo.path = []; mo.timer = 3; mo.targetId = null; }
+    if (p.escaped) w.escaped = Math.max(0, w.escaped - 1);
+    w.players.delete(id);
+    if (!w.players.size && w.phase === "play") { w.phase = "end"; w.result = "empty"; }
+    else checkEnd(w);
+    return p;
+  }
   function clearQuestion(w, id) {
     for (const target of [...w.fuses, w.breaker, w.cctv]) if (target.busy === id) target.busy = null;
   }
@@ -466,5 +478,5 @@ window.Sim = (function () {
   function secondAt(w) { const r = w.settings.requiredFuses; return r <= 6 ? Math.ceil(r * 2 / 3) : Math.ceil(r / 2); }
   function requiredMet(w) { return w.inserted >= w.settings.requiredFuses; }
 
-  return { DEFAULTS, PLAYER_SPEED, createWorld, addPlayer, handle, tick, snapshot, requiredMet, resumeState, clearQuestion, result };
+  return { DEFAULTS, PLAYER_SPEED, createWorld, addPlayer, removePlayer, handle, tick, snapshot, requiredMet, resumeState, clearQuestion, result };
 })();
