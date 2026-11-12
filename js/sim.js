@@ -79,7 +79,8 @@ window.Sim = (function () {
         if (!p.hid) p.hidePrev = { x: p.x, y: p.y, a: p.a };
         p.hid = { x: m.x, y: m.y }; p.hidT = w.elapsed;
         if (m.l !== undefined) p.light = !!m.l;
-        p.seenHide = w.monsters.some(mo => mo.state !== "sleep" && mo.state !== "dormant" && MapUtil.sameFloor(mo,p) && Math.hypot(mo.x-p.x,mo.y-p.y)<7 && MapUtil.los(mo.x,mo.y,p.x,p.y));
+        // 숨는 모습을 '실제로 본' 경우만 들킨다: 평소 시야 규칙과 똑같이(손전등 켬 12칸, 끔이면 정면 6칸·등 뒤 2.5칸)
+        p.seenHide = w.monsters.some(mo => mo.state !== "sleep" && mo.state !== "dormant" && mo.state !== "feed" && canSee(mo, p));
         break;
       }
       case "unhide": leaveHiding(w, p); break;
@@ -233,7 +234,8 @@ window.Sim = (function () {
         if (p.down || p.escaped || !MapUtil.sameFloor(p,mo)) continue;
         const d = Math.hypot(p.x - mo.x, p.y - mo.y);
         if (p.hid) {
-          if (p.seenHide && d < 1.3) { catchPlayer(w, p, mo); return; }
+          // 숨는 걸 봤거나, 지금도 틈으로 불빛이 새고 있으면 바로 앞에서 끌어낸다
+          if ((p.seenHide || p.light) && d < 1.3) { catchPlayer(w, p, mo); return; }
           // 사물함 안에서 손전등을 켜 두면 틈으로 빛이 샌다
           if (p.light && d < 10) { const spot = lockerFront(mo, p.hid); if (spot && d < ld) { ld = d; lit = { p, x: spot.x, y: spot.y, locker: true }; } }
           continue;
@@ -257,7 +259,6 @@ window.Sim = (function () {
         }
       }
       if (!best && lit && mo.state !== "chase") {
-        if (lit.locker) lit.p.seenHide = true;
         const fresh = mo.state !== "hunt" || mo.lightId !== lit.p.id;
         mo.repath -= 0.25;
         if (fresh || mo.repath <= 0) {
@@ -329,6 +330,13 @@ window.Sim = (function () {
     followPath(mo, ROAM, dt);
   }
 
+  function canSee(mo, p) {
+    if (!MapUtil.sameFloor(mo, p)) return false;
+    const d = Math.hypot(p.x - mo.x, p.y - mo.y);
+    if (d >= 12 || !MapUtil.los(mo.x, mo.y, p.x, p.y)) return false;
+    let da = Math.abs(Math.atan2(p.y - mo.y, p.x - mo.x) - mo.a) % (Math.PI * 2); if (da > Math.PI) da = Math.PI * 2 - da;
+    return d < (p.light ? 12 : (da < 0.9 ? 6 : 2.5));
+  }
   // 손전등 빛이 닿는 곳(앞쪽 벽까지 최대 7칸)
   function beamSpot(p) {
     const cx = Math.cos(p.a), cy = Math.sin(p.a);
