@@ -32,13 +32,16 @@
         else {
           const p = this.players.get(from), w = this.worlds[p.team];
           if (d.requestId && p.resumeRequest !== d.requestId) { Sim.clearQuestion(w, from); p.resumeRequest = d.requestId; }
-          this.sendGo(from, d.requestId);
+          this.sendGo(from, d.requestId); this.restoreLocal();
         }
         return;
       }
       const p = this.players.get(from); if (!p || !this.started) return;
-      const w = this.worlds[p.team]; if (w) { MapUtil.use(w.mapState); Sim.handle(w, from, d); }
+      const w = this.worlds[p.team]; if (w) { MapUtil.use(w.mapState); Sim.handle(w, from, d); this.restoreLocal(); }
     },
+    // 교사가 같이 할 때: 다른 팀 지도로 계산한 뒤에는 교사 팀 지도로 되돌린다
+    localId: null,
+    restoreLocal() { if (!this.localId) return; const p = this.players.get(this.localId), w = p && this.worlds[p.team]; if (w) MapUtil.use(w.mapState); },
     names() { const o = {}; for (const p of this.players.values()) o[p.id] = p.name; return o; },
     assignTeams(all) {
       // all: 팀 인원 설정을 바꿨을 때 전원 다시 나눔. 아니면 새로 들어온 학생만 자리가 남는 팀에 넣는다(선생님이 옮긴 팀은 그대로).
@@ -105,7 +108,7 @@
       for (const p of this.players.values()) { MapUtil.use(this.worlds[p.team].mapState); Sim.addPlayer(this.worlds[p.team], p.id, p.name); }
       const cm = document.getElementById("console-map"); if (cm) cm.textContent = this.worlds.map((w, i) => (this.worlds.length > 1 ? `${i + 1}팀 ` : "") + (w.seed ? "#" + w.seed : "기본")).join(" · ");
       HostView.init(this.worlds, this.names());
-      this.sendGo();
+      this.sendGo(); this.restoreLocal();
       this.lastTick = performance.now();
       this.timer = setInterval(() => this.loop(), 50);
     },
@@ -133,7 +136,7 @@
       }
       this.snapAcc += dt;
       if (this.snapAcc >= 0.1) { this.snapAcc = 0; for (const w of this.worlds) { MapUtil.use(w.mapState); Net.sendToClients(Sim.snapshot(w), w.team); } }
-      HostView.render(); renderHiddenPanel();
+      HostView.render(); renderHiddenPanel(); this.restoreLocal();
       if (this.worlds.length && this.worlds.every(w => w.phase === "end")) $("btn-host-end").textContent = "결과 보기";
     },
     end() {
@@ -190,7 +193,7 @@
     const nT = keys.length ? Math.max(...keys.map(Number)) + 1 : 1;
     const opt = (cur) => Array.from({ length: nT + 1 }, (_, t) => `<option value="${t}"${t === cur ? " selected" : ""}>${t < nT ? t + 1 + "팀" : "새 팀"}</option>`).join("");
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-    const html = keys.length ? keys.map(k => `<div class="team"><b>${+k + 1}팀</b> <span class="muted">${byTeam[k].length}명</span><div class="team-list">${byTeam[k].map(p => `<div class="mem"><span class="nm">${esc(p.name)}</span> <select data-id="${esc(p.id)}" title="팀 옮기기">${opt(+k)}</select><button class="kick" data-kick="${esc(p.id)}" title="내보내기">내보내기</button></div>`).join("")}</div></div>`).join("") : `<div class="muted">학생들이 접속하면 여기에 보입니다.</div>`;
+    const html = keys.length ? keys.map(k => `<div class="team"><b>${+k + 1}팀</b> <span class="muted">${byTeam[k].length}명</span><div class="team-list">${byTeam[k].map(p => `<div class="mem"><span class="nm">${esc(p.name)}</span> <select data-id="${esc(p.id)}" title="팀 옮기기">${opt(+k)}</select>${p.id === HostGame.localId ? `<span class="muted small">(선생님)</span>` : `<button class="kick" data-kick="${esc(p.id)}" title="내보내기">내보내기</button>`}</div>`).join("")}</div></div>`).join("") : `<div class="muted">학생들이 접속하면 여기에 보입니다.</div>`;
     if (html === lastLobbyHtml) { $("lobby-count").textContent = HostGame.players.size + "명"; return; }  // 고르는 중에 목록이 다시 그려져 닫히지 않게
     lastLobbyHtml = html; $("lobby-teams").innerHTML = html;
     $("lobby-teams").querySelectorAll("select[data-id]").forEach(sel => { sel.onchange = () => HostGame.moveTeam(sel.dataset.id, +sel.value); });
@@ -199,7 +202,7 @@
   }
 
   // ---------------- 화면: 타이틀 ----------------
-  $("btn-teacher").onclick = () => {
+  function openRoom(play) {
     const code = String(Math.floor(1000 + Math.random() * 9000));
     Net.host(code);
     Net.onMessage((d, from) => HostGame.onMsg(d, from));
@@ -208,7 +211,18 @@
     bindSettings();
     show("host-lobby");
     setInterval(() => { if (!HostGame.started) HostGame.broadcastLobby(); }, 1500);
-  };
+    if (play) {
+      // 교사도 한 명의 참가자로: 이 페이지 안에서 학생 화면을 같이 돌린다
+      const name = (prompt("게임에서 쓸 이름 (8자 이내)", "선생님") || "선생님").trim().slice(0, 8) || "선생님";
+      Horror.init(); teacherPlays = true; HostGame.localId = Net.id;
+      Net.addHostPlayer((d, from) => clientRecv(d, from));
+      Net.sendToHost({ t: "join", name });
+    }
+  }
+  $("btn-teacher").onclick = () => openRoom(false);
+  $("btn-teacher-play").onclick = () => openRoom(true);
+  $("btn-to-console").onclick = () => { if (document.pointerLockElement) document.exitPointerLock(); show("host-console"); };
+  $("btn-to-game").onclick = () => { if (!ending) show("game"); };
   $("btn-student").onclick = () => { fillSavedSession(); show("client-lobby"); $("inp-name").focus(); };
   $("btn-solo").onclick = () => {
     Horror.init();
@@ -244,7 +258,7 @@
   // ---------------- 화면: 학생 ----------------
   let myTeam = -1, joined = false, gameStarted = false, lobbyInfo = null;
   const SESSION_KEY = "blackoutlab.session.v1";
-  let noteText = "";
+  let noteText = "", teacherPlays = false;
   let activeSession = null, joinTimer = null, lastHostAt = 0, lastJoinAt = 0, syncRequest = null, recovering = false, ending = false;
   function readSession() {
     try {
@@ -372,6 +386,7 @@
       const reqChanged = window.BL_REQ !== d.settings.requiredFuses; window.BL_REQ = d.settings.requiredFuses;
       if (!d.settings.seed) MapUtil.load(null); else if (reqChanged || MapUtil.seed !== d.settings.seed) MapUtil.load(MapGen.generate(d.settings.seed));
       show("game");
+      $("btn-to-console").style.display = teacherPlays ? "" : "none"; $("btn-to-game").style.display = teacherPlays ? "" : "none";
       const wasStarted = gameStarted; gameStarted = true; recovering = false; syncRequest = null; reconnectNotice(false);
       if (activeSession && mine[1] !== activeSession.name) setTimeout(() => Client.toast(`이 기기는 이미 '${mine[1]}'(으)로 참가 중이라 그 이름, 그 팀으로 이어서 합니다.`), 600);
       if (wasStarted) Client.restore(d.snapshot, d.playerState);
@@ -385,6 +400,7 @@
   }
   function clientEnd(e) {
     if (ending) return; ending = true;
+    if (teacherPlays) { setTimeout(() => { Client.stop(); $("btn-to-game").style.display = "none"; show("host-console"); }, 2500); return; }
     clearInterval(joinTimer); joinTimer = null; activeSession = null; forgetSession(); reconnectNotice(false);
     setTimeout(() => {
       Client.stop();
@@ -403,6 +419,7 @@
   $("btn-options-title").onclick = () => Options.show();
   $("btn-options").onclick = () => Options.show();
   $("btn-options").addEventListener("pointerdown", e => e.stopPropagation());
+  $("btn-to-console").addEventListener("pointerdown", e => e.stopPropagation());
 
   // 패드·폰: 두 번 탭 확대, 두 손가락 확대, 길게 눌러 확대경·메뉴 막기 (이동하면서 시점 돌리면 손가락 둘을 쓰므로 필수)
   const isField = t => t && /^(INPUT|SELECT|TEXTAREA)$/.test(t.tagName);

@@ -47,7 +47,7 @@ input, select { font: inherit; background: #0d0e11; color: #eee; border: 1px sol
 #hud-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 #hud-time { font-family: ui-monospace, monospace; font-size: 1.3rem; color: #ff5a5a; text-shadow: 0 0 8px rgba(255,0,0,0.6); }
 #hud-fuse { color: #ddd; }
-#btn-mute, #btn-map, #btn-options { pointer-events: auto; padding: 4px 8px; background: rgba(0,0,0,0.5); }
+#btn-mute, #btn-map, #btn-options, #btn-to-console { pointer-events: auto; padding: 4px 8px; background: rgba(0,0,0,0.5); }
 #lock-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(0,0,0,0.6); color: #cfc8bc; font-size: 0.85rem; pointer-events: none; white-space: nowrap; display: none; }
 #hud-noise-wrap { height: 4px; background: rgba(255,255,255,0.08); margin-top: 6px; border-radius: 2px; overflow: hidden; }
 #hud-noise { height: 100%; width: 0; background: linear-gradient(90deg, #5a0000, #ff2020); transition: width 0.3s; }

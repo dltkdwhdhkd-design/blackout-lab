@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="format-detection" content="telephone=no">
 <title>BLACKOUT LAB — 정전</title>
-<link rel="stylesheet" href="css/style.css??v=20261112-device">
+<link rel="stylesheet" href="css/style.css??v=20261112-teacherplay">
 </head>
 <body>
 
@@ -19,6 +19,7 @@
     <div class="btns">
       <button id="btn-resume" class="big primary" style="display:none">이전 게임 이어하기</button>
       <button id="btn-teacher" class="big">교사 · 방 만들기</button>
+      <button id="btn-teacher-play" class="big">교사 · 방 만들고 같이 하기</button>
       <button id="btn-student" class="big primary">학생 · 참가하기</button>
       <button id="btn-solo">혼자 연습</button>
       <button id="btn-options-title" class="ghost">⚙ 설정 (소리 · 감도)</button>
@@ -77,7 +78,7 @@
     <div id="hud-top">
       <span id="hud-time">12:00</span>
       <span id="hud-fuse">부품 0/7</span>
-      <span><button id="btn-map">지도</button> <button id="btn-mute">🔊</button> <button id="btn-options">⚙</button></span>
+      <span><button id="btn-to-console" style="display:none">관제</button> <button id="btn-map">지도</button> <button id="btn-mute">🔊</button> <button id="btn-options">⚙</button></span>
     </div>
     <div id="hud-noise-wrap"><div id="hud-noise"></div></div>
     <div id="hud-safe"></div>
@@ -146,6 +147,7 @@
   <div id="console-top">
     <span>관제실 · 방 <b id="console-code"></b> · 지도 <b id="console-map"></b></span>
     <span id="console-net" class="muted small"></span>
+    <button id="btn-to-game" style="display:none">내 게임 화면</button>
     <button id="btn-hidden">숨은 학생 꺼내기</button>
     <button id="btn-host-end" class="danger">게임 종료</button>
   </div>
@@ -168,20 +170,20 @@
 <script src="lib/peerjs.min.js"></script>
 <script src="js/questions.js"></script>
 <script src="js/props.js"></script>
-<script src="js/map.js??v=20261112-device"></script>
+<script src="js/map.js??v=20261112-teacherplay"></script>
 <script src="js/mapgen.js"></script>
-<script src="js/floors.js??v=20261112-device"></script>
-<script src="js/net.js??v=20261112-device"></script>
-<script src="js/soundbank.js??v=20261112-device"></script>
-<script src="js/audio.js??v=20261112-device"></script>
-<script src="js/options.js??v=20261112-device"></script>
+<script src="js/floors.js??v=20261112-teacherplay"></script>
+<script src="js/net.js??v=20261112-teacherplay"></script>
+<script src="js/soundbank.js??v=20261112-teacherplay"></script>
+<script src="js/audio.js??v=20261112-teacherplay"></script>
+<script src="js/options.js??v=20261112-teacherplay"></script>
 <script src="js/propart.js"></script>
 <script src="js/assets.js"></script>
-<script src="js/fps.js??v=20261112-device"></script>
+<script src="js/fps.js??v=20261112-teacherplay"></script>
 <script src="js/hand.js"></script>
-<script src="js/sim.js??v=20261112-device"></script>
-<script src="js/client.js??v=20261112-device"></script>
-<script src="js/host.js??v=20261112-device"></script>
-<script src="js/main.js??v=20261112-device"></script>
+<script src="js/sim.js??v=20261112-teacherplay"></script>
+<script src="js/client.js??v=20261112-teacherplay"></script>
+<script src="js/host.js??v=20261112-teacherplay"></script>
+<script src="js/main.js??v=20261112-teacherplay"></script>
 </body>
 </html>

@@ -63,6 +63,7 @@ window.Net = (function () {
     }
   }
   function setTeam(t) {
+    if (isHost) { myTeam = t; return; }   // 같이 하는 교사: 구독은 호스트 것 그대로
     if (myTeam === t) return;
     for (const c of clients) if (c && c.connected && myTeam >= 0) c.unsubscribe(PREFIX + code + "/t" + myTeam);
     myTeam = t;
@@ -118,7 +119,7 @@ window.Net = (function () {
     generation++; clearInterval(peerTimer); peerTimer = null;
     const oldClients = clients.splice(0), oldPeer = peer;
     peer = null; hostConn = null; peerConns.clear();
-    local = null; code = null; myTeam = -1; seen.clear(); seq = 0; wireId = newId();
+    local = null; hostPlayer = null; code = null; myTeam = -1; seen.clear(); seq = 0; wireId = newId();
     for (const c of oldClients) { try { c.end(true); } catch (e) {} }
     if (oldPeer) { try { oldPeer.destroy(); } catch (e) {} }
   }
@@ -141,8 +142,12 @@ window.Net = (function () {
     status();
   }
   // 호스트가 보냄. team === undefined → 전체
+  // 교사도 같은 페이지에서 플레이: 네트워크 호스트 + 이 페이지 안의 학생 한 명
+  let hostPlayer = null;
+  function addHostPlayer(toClient) { hostPlayer = toClient; }
   function sendToClients(d, team) {
     if (local) { if (local.toClient) local.toClient(d); return; }
+    if (hostPlayer) { const hp = hostPlayer; queueMicrotask(() => hp(d, myId)); }
     const str = pack(d);
     publish(PREFIX + code + (team === undefined ? "/h" : "/t" + team), str);
     for (const [, conn] of peerConns) {
@@ -157,6 +162,7 @@ window.Net = (function () {
   // 클라이언트가 호스트에 보냄
   function sendToHost(d) {
     if (local) { local.toHost(d, myId); return; }
+    if (isHost && hostPlayer) { const fn = onMsg; queueMicrotask(() => fn && fn(d, myId)); return; }
     const str = pack(d);
     if (hostConn && hostConn.open) { try { hostConn.send(str); } catch (e) {} }
     publish(PREFIX + code + "/c", str);
@@ -164,7 +170,7 @@ window.Net = (function () {
   function setLocalClient(fn) { if (local) local.toClient = fn; }
 
   return {
-    newId, host, join, reconnect, disconnect, startLocal, setLocalClient, sendToClients, sendToHost, setTeam, tagPeerTeam,
+    newId, host, join, reconnect, disconnect, startLocal, setLocalClient, addHostPlayer, sendToClients, sendToHost, setTeam, tagPeerTeam,
     onMessage(fn) { onMsg = fn; }, onStatus(fn) { onStatus = fn; },
     get id() { return myId; }, get code() { return code; }, get isHost() { return isHost; },
   };
