@@ -26,6 +26,8 @@
             Net.sendToClients({ t: "roster", players: this.lobbyMsg().players });
           } else this.assignTeams();
         }
+        { const p = this.players.get(from), nm = String(d.name || "?").slice(0, 8);
+          if (p && nm !== p.name) Net.sendToClients({ t: "note", to: from, text: `이 기기는 이미 '${p.name}'(으)로 들어와 있어서 그 이름, 그 팀으로 이어서 합니다.` }); }
         if (!this.started) this.broadcastLobby();
         else {
           const p = this.players.get(from), w = this.worlds[p.team];
@@ -242,6 +244,7 @@
   // ---------------- 화면: 학생 ----------------
   let myTeam = -1, joined = false, gameStarted = false, lobbyInfo = null;
   const SESSION_KEY = "blackoutlab.session.v1";
+  let noteText = "";
   let activeSession = null, joinTimer = null, lastHostAt = 0, lastJoinAt = 0, syncRequest = null, recovering = false, ending = false;
   function readSession() {
     try {
@@ -254,6 +257,10 @@
     if (!activeSession) return;
     activeSession.savedAt = Date.now();
     try { localStorage.setItem(SESSION_KEY, JSON.stringify(activeSession)); } catch (e) {}
+  }
+  function deviceId() {
+    try { let id = localStorage.getItem("blackoutlab.device"); if (!id || id.length < 8) { id = Net.newId(); localStorage.setItem("blackoutlab.device", id); } return id; }
+    catch (e) { return Net.newId(); }
   }
   function forgetSession() { try { localStorage.removeItem(SESSION_KEY); } catch (e) {} }
   function fillSavedSession() {
@@ -294,8 +301,9 @@
   function joinGame() {
     const name = $("inp-name").value.trim(), code = $("inp-code").value.trim();
     if (!name || !/^\d{4}$/.test(code)) { $("join-msg").textContent = "별명과 4자리 방 코드를 입력하세요."; return; }
-    const saved = readSession();
-    activeSession = saved && saved.code === code && saved.name === name ? saved : { id: Net.newId(), code, name, roomId: null };
+    const saved = readSession(); noteText = "";
+    // 기기마다 고정된 아이디로 들어간다: 새로고침 후 다른 이름으로 들어와도 같은 학생(같은 팀)으로 처리된다
+    activeSession = saved && saved.code === code ? { ...saved, id: deviceId(), name } : { id: deviceId(), code, name, roomId: null };
     saveSession();
     joined = false; gameStarted = false; recovering = false; ending = false; myTeam = -1; syncRequest = Net.newId();
     lastHostAt = Date.now(); lastJoinAt = 0;
@@ -325,6 +333,7 @@
 
   function clientRecv(d, from) {
     if (!d || ending || (d.to && d.to !== Net.id)) return;
+    if (d.t === "note") { noteText = d.text; if (gameStarted) Client.toast && Client.toast(d.text); else $("join-msg").innerHTML += `<br><span class="muted">${d.text}</span>`; return; }
     if (d.t === "kicked") {
       if (gameStarted) return;
       forgetSession(); cancelJoin(); show("join"); $("join-msg").textContent = "선생님이 대기실에서 내보냈습니다. 이름을 확인하고 다시 들어오세요."; return;
@@ -341,8 +350,9 @@
         if (activeSession && !activeSession.roomId) { activeSession.roomId = from || d.roomId; saveSession(); }
       }
       lobbyInfo = d;
+      if (mine && activeSession && mine[1] !== activeSession.name) noteText = `이 기기는 이미 '${mine[1]}'(으)로 들어와 있어서 그 이름, 그 팀으로 이어서 합니다.`;
       const mates = d.players.filter(p => p[2] === myTeam).map(p => p[1]);
-      $("join-msg").innerHTML = mine ? `<b>${myTeam + 1}팀</b> — ${mates.join(", ")}<br><span class="muted">선생님이 시작하면 바로 시작됩니다. 소리를 켜 두세요.</span>` : "입장 중…";
+      $("join-msg").innerHTML = mine ? `<b>${myTeam + 1}팀</b> — ${mates.join(", ")}<br><span class="muted">선생님이 시작하면 바로 시작됩니다. 소리를 켜 두세요.</span>${noteText ? `<br><span class="muted">${noteText}</span>` : ""}` : "입장 중…";
       return;
     }
     if (d.t === "go") {
@@ -363,6 +373,7 @@
       if (!d.settings.seed) MapUtil.load(null); else if (reqChanged || MapUtil.seed !== d.settings.seed) MapUtil.load(MapGen.generate(d.settings.seed));
       show("game");
       const wasStarted = gameStarted; gameStarted = true; recovering = false; syncRequest = null; reconnectNotice(false);
+      if (activeSession && mine[1] !== activeSession.name) setTimeout(() => Client.toast(`이 기기는 이미 '${mine[1]}'(으)로 참가 중이라 그 이름, 그 팀으로 이어서 합니다.`), 600);
       if (wasStarted) Client.restore(d.snapshot, d.playerState);
       else Client.start({ id: Net.id, team: myTeam, settings: d.settings, names, spawnIndex: idx, onEnd: clientEnd, snapshot: d.snapshot, playerState: d.playerState });
       return;
