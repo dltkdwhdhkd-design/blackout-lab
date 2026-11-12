@@ -7,7 +7,7 @@ window.MapGen = (function () {
   const CONTAIN = { id: "contain1", name: "격리실 A", tex: "contain", units: [], kind: "intro" };
   const WING = [
     { id: "contain2", name: "격리실 B", tex: "contain", units: [], kind: "cell" },
-    { id: "monitor", name: "관찰 제어실", tex: "lab", units: ["intro"], kind: "desks", cells: 1 },
+    { id: "monitor", name: "CCTV실", tex: "lab", units: ["intro"], kind: "desks", cells: 1 },
     { id: "server", name: "서버실", tex: "power", units: ["intro"], kind: "racks", cells: 1 },
     { id: "archive", name: "기록 보관실", tex: "lab", units: [], kind: "shelves" },
     { id: "medical", name: "의무실", tex: "lab", units: ["life"], kind: "beds", cells: 1 },
@@ -186,7 +186,7 @@ window.MapGen = (function () {
         case "cell": { const cx = ri(r.x0 + 1, Math.max(r.x0 + 1, r.x1 - 6)), cy = r.y0 + 1; if (w >= 8 && h >= 7) { tryBlock(r, cx, cy, cx + 5, cy) && tryBlock(r, cx, cy + 1, cx, cy + 3) && tryBlock(r, cx + 5, cy + 1, cx + 5, cy + 3) && tryBlock(r, cx + 1, cy + 3, cx + 2, cy + 3) && tryBlock(r, cx + 4, cy + 3, cx + 4, cy + 3); } break; }
       }
     }
-    // 관찰 제어실엔 CCTV 관제석이 꼭 하나 이상
+    // CCTV실엔 CCTV 관제석이 꼭 하나 이상
     { const mon = rooms.find(r => r.id === "monitor"); if (mon && !g.slice(mon.y0, mon.y1 + 1).some(row => row.slice(mon.x0, mon.x1 + 1).includes("c"))) if (!placeAgainstWall(mon, "c", 0, null)) return null; }
 
     // ---- 단말기(에너지 셀) 14개 ----

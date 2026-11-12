@@ -48,6 +48,7 @@
     start() {
       this.started = true;
       // 지도: 매판 새로 (번호로 모든 기기가 같은 지도를 만든다) 또는 기본 지도
+      window.BL_REQ = this.settings.requiredFuses;   // 1층 장비 수가 필요 셀 수에 따라 달라진다
       if (this.settings.mapMode === 0) { this.settings.seed = 0; MapUtil.load(null); }
       else { let m = null; while (!m) { this.settings.seed = 1 + Math.floor(Math.random() * 999998); m = MapGen.generate(this.settings.seed); } MapUtil.load(m); }
       const cm = document.getElementById("console-map"); if (cm) cm.textContent = this.settings.seed ? "#" + this.settings.seed : "기본";
@@ -277,7 +278,8 @@
         $("join-msg").textContent = "선생님 화면을 새로고침한 뒤 방을 다시 만들어 주세요."; return;
       }
       const idx = d.players.filter(p => p[2] === myTeam).findIndex(p => p[0] === Net.id);
-      if (!d.settings.seed) MapUtil.load(null); else if (MapUtil.seed !== d.settings.seed) MapUtil.load(MapGen.generate(d.settings.seed));
+      const reqChanged = window.BL_REQ !== d.settings.requiredFuses; window.BL_REQ = d.settings.requiredFuses;
+      if (!d.settings.seed) MapUtil.load(null); else if (reqChanged || MapUtil.seed !== d.settings.seed) MapUtil.load(MapGen.generate(d.settings.seed));
       show("game");
       const wasStarted = gameStarted; gameStarted = true; recovering = false; syncRequest = null; reconnectNotice(false);
       if (wasStarted) Client.restore(d.snapshot, d.playerState);

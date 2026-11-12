@@ -70,7 +70,7 @@ window.ROOMS = [
   {"id": "hallS", "name": "남쪽 복도", "x0": 3, "y0": 40, "x1": 80, "y1": 41, "units": [], "tex": "hall"},
   {"id": "contain1", "name": "격리실 A", "x0": 4, "y0": 1, "x1": 13, "y1": 10, "units": [], "tex": "contain"},
   {"id": "contain2", "name": "격리실 B", "x0": 15, "y0": 1, "x1": 24, "y1": 10, "units": [], "tex": "contain"},
-  {"id": "monitor", "name": "관찰 제어실", "x0": 26, "y0": 1, "x1": 41, "y1": 10, "units": ["intro"], "tex": "lab"},
+  {"id": "monitor", "name": "CCTV실", "x0": 26, "y0": 1, "x1": 41, "y1": 10, "units": ["intro"], "tex": "lab"},
   {"id": "server", "name": "서버실", "x0": 43, "y0": 1, "x1": 54, "y1": 10, "units": ["intro"], "tex": "power"},
   {"id": "archive", "name": "기록 보관실", "x0": 56, "y0": 1, "x1": 67, "y1": 10, "units": [], "tex": "lab"},
   {"id": "medical", "name": "의무실", "x0": 69, "y0": 1, "x1": 79, "y1": 10, "units": ["life"], "tex": "lab"},

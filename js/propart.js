@@ -111,7 +111,7 @@ window.PropArt = (function () {
       for (let i = 0; i < 10; i++) { g.fillStyle = i < 7 ? "#3dff7a" : i < 9 ? "#ffb43d" : "#3a1a1a"; g.fillRect(W - 66, H * 0.26 + i * 9, 12, 6); } for (let k = 0; k < 3; k++) knob(g, 70 + k * 26, H * 0.32, 7);
       slot(g, W / 2 - 24, H * 0.47, 48, 70, full); for (let y = H * 0.76; y < H * 0.95; y += 6) { g.fillStyle = "#050506"; g.fillRect(52, y, W - 104, 3); }
       cable(g, 60, H * 0.97, 10, H, "#111", 7); cable(g, W - 60, H * 0.97, W - 6, H * 0.99, "#1a2a4a", 6); },
-    dev_monitor(g, W, H, full) { // 관찰 제어실: 비상 전원함 (경고 줄무늬·레버)
+    dev_monitor(g, W, H, full) { // CCTV실: 비상 전원함 (경고 줄무늬·레버)
       g.fillStyle = "#4a4e46"; g.fillRect(W / 2 - 10, 0, 20, H * 0.1); box(g, 26, H * 0.09, W - 52, H * 0.78, "#6c7064", "#3c4036"); stripes(g, 26, H * 0.09, W - 52, 12);
       g.fillStyle = "#e8c21a"; g.beginPath(); g.moveTo(W / 2, H * 0.15); g.lineTo(W / 2 + 22, H * 0.27); g.lineTo(W / 2 - 22, H * 0.27); g.closePath(); g.fill(); g.fillStyle = "#111"; g.beginPath(); g.moveTo(W / 2 + 3, H * 0.17); g.lineTo(W / 2 - 6, H * 0.225); g.lineTo(W / 2, H * 0.225); g.lineTo(W / 2 - 3, H * 0.26); g.lineTo(W / 2 + 6, H * 0.205); g.lineTo(W / 2, H * 0.205); g.closePath(); g.fill();
       for (let k = 0; k < 6; k++) { g.fillStyle = "#121314"; g.fillRect(42 + k * 26, H * 0.31, 18, 28); g.fillStyle = k === 2 ? "#c33" : "#ddd"; g.fillRect(46 + k * 26, H * 0.31 + (k === 2 ? 16 : 4), 10, 8); }
