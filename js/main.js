@@ -41,7 +41,18 @@
     assignTeams(all) {
       // all: 팀 인원 설정을 바꿨을 때 전원 다시 나눔. 아니면 새로 들어온 학생만 자리가 남는 팀에 넣는다(선생님이 옮긴 팀은 그대로).
       const list = [...this.players.values()], size = this.settings.teamSize;
-      if (all) { list.forEach((p, i) => p.team = Math.floor(i / size)); return; }
+      if (all) {
+        if (all === "shuffle") {   // 팀 섞기: 무작위로 섞은 뒤 팀 인원대로 나눈다 (이전과 같은 배정이면 한 번 더)
+          const before = list.map(p => p.team).join();
+          for (let k = 0; k < 5; k++) {
+            for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+            list.forEach((p, i) => p.team = Math.floor(i / size));
+            if (list.length < 2 || [...this.players.values()].map(p => p.team).join() !== before) break;
+          }
+          return;
+        }
+        list.forEach((p, i) => p.team = Math.floor(i / size)); return;
+      }
       for (const p of list) {
         if (p.team >= 0) continue;
         let t = 0; while (list.filter(q => q.team === t).length >= size) t++;
@@ -217,7 +228,7 @@
     }
     updateSecondHint();
   }
-  $("btn-shuffle").onclick = () => { HostGame.assignTeams(true); HostGame.broadcastLobby(); };
+  $("btn-shuffle").onclick = () => { HostGame.assignTeams("shuffle"); HostGame.broadcastLobby(); };
   $("btn-start").onclick = () => {
     if (!HostGame.players.size) { alert("접속한 학생이 없습니다."); return; }
     HostGame.start(); show("host-console");
