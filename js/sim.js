@@ -35,7 +35,7 @@ window.Sim = (function () {
   function addPlayer(w, id, name) {
     const spawns = MapUtil.find("S");
     const s = spawns[w.players.size % spawns.length];
-    w.players.set(id, { id, name, x: s.x + 0.5, y: s.y + 0.5, a: 0, down: false, downT: 0, hid: null, hidT: 0, seenHide: false, escaped: false, rev: 0, revT: 0, lastPos: -9, caught: 0, light: true, carry: 0, medkit: false, travelRev: 0, stairAt: -9 });
+    w.players.set(id, { id, name, x: s.x + 0.5, y: s.y + 0.5, a: 0, down: false, downT: 0, hid: null, hidT: 0, seenHide: false, escaped: false, rev: 0, revT: 0, lastPos: -9, caught: 0, light: true, carry: 0, medkit: true, travelRev: 0, stairAt: -9 });   // 구급상자 하나는 들고 시작
   }
 
   // 이번 판에 안 나온 문제 → 그중에서도 최근 판들(교사 기기에 기록)에 안 나온 문제를 먼저
@@ -155,7 +155,7 @@ window.Sim = (function () {
         const mk = w.medkits[m.id];
         if (!mk || mk.taken || p.medkit || p.down || p.escaped) break;
         if (Math.hypot(mk.x - p.x, mk.y - p.y) > 1.6) break;
-        mk.taken = true; p.medkit = true; emit(w, { k: "medkit", id: from, by: p.name });
+        mk.taken = true; mk.back = w.elapsed + 180; p.medkit = true; emit(w, { k: "medkit", id: from, by: p.name });   // 가져가면 3분 뒤 같은 자리에 새로
         break;
       }
       case "cancelq": {
@@ -441,6 +441,7 @@ window.Sim = (function () {
         }
       }
     }
+    for (const mk of w.medkits) if (mk.taken && w.elapsed >= mk.back) mk.taken = false;   // 구급상자 다시 생김
     const second = w.monsters[1];
     if (second && second.state === "dormant" && w.fuses.filter(f=>f.fixed).length >= secondAt(w)) {
       // 회수한 셀 기준. 2층에서 플레이어 바로 앞을 피해 출현한다.

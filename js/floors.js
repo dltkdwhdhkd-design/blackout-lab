@@ -56,9 +56,9 @@ window.Building = (() => {
     }
     const rooms = lower.rooms.map(r=>({...r,floor:1,baseId:r.id})).concat(upper.rooms.map(r=>({...r,id:'f2_'+r.id,baseId:r.id,floor:2,name:UPPER_NAMES[r.id]||r.name,y0:r.y0+offset,y1:r.y1+offset,units:r.id==='chem'?['gas','state']:r.units})));
     function meds(m,g,dy) {
-      if(m.meds) return m.meds.map(([x,y])=>[x,y+dy]);
+      if(m.meds) return m.meds.slice(0,1).map(([x,y])=>[x,y+dy]);   // 방마다 구급상자 한 자리
       const room=m.rooms.find(r=>r.id==='medical'), out=[];
-      for(let y=room.y0+1;y<room.y1&&out.length<2;y+=3)for(let x=room.x0+1;x<room.x1&&out.length<2;x+=5)if(g[y][x]==='.')out.push([x+0.5,y+dy+0.5]);
+      for(let y=room.y0+1;y<room.y1&&out.length<1;y+=3)for(let x=room.x0+1;x<room.x1&&out.length<1;x+=5)if(g[y][x]==='.')out.push([x+0.5,y+dy+0.5]);
       return out;
     }
     cached = {seed,req,rows:[...grids[0].map(r=>r.join('')),...Array(gap).fill('#'.repeat(W)),...grids[1].map(r=>r.join(''))],rooms,stairs,
