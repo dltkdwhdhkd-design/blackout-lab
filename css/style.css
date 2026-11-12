@@ -124,3 +124,7 @@ input[type=range], input[type=checkbox] { accent-color: #b52222; }
 .team .mem .nm { white-space: nowrap; font-weight: 600; }
 .team .mem .kick { white-space: nowrap; background: #3a1416; color: #ffb0b0; border: 1px solid #6a2a2e; border-radius: 3px; font-size: 13px; padding: 2px 6px; cursor: pointer; }
 .team .team-list { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+#hidden-panel { position: absolute; top: 44px; right: 300px; width: 320px; max-height: 60%; overflow: auto; background: rgba(11,12,15,0.96); border: 1px solid #2f313b; padding: 10px 12px; z-index: 5; font-size: 14px; }
+#hidden-panel .hp-head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; } #hidden-panel .hp-head b { margin-right: auto; }
+#hidden-panel .hp-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-top: 1px solid #23242b; }
+@media (max-width: 800px) { #hidden-panel { right: 0; width: 100%; } }

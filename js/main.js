@@ -63,6 +63,11 @@
       const p = this.players.get(id); if (!p || this.started) return;
       p.team = Math.max(0, team); this.broadcastLobby();
     },
+    forceOut(id) {
+      const p = this.players.get(id); if (!p) return; const w = this.worlds[p.team]; if (!w) return;
+      MapUtil.use(w.mapState); if (Sim.forceOut(w, id)) HostView.addLog(p.team, `${p.name} 사물함에서 꺼냄(선생님)`);
+      renderHiddenPanel(true);
+    },
     // 대기실에서 내보내기: 목록에서 빼고 그 학생 화면을 입장 화면으로 돌려보낸다(다시 들어오는 건 가능)
     kick(id) {
       const p = this.players.get(id); if (!p || this.started) return;
@@ -126,7 +131,7 @@
       }
       this.snapAcc += dt;
       if (this.snapAcc >= 0.1) { this.snapAcc = 0; for (const w of this.worlds) { MapUtil.use(w.mapState); Net.sendToClients(Sim.snapshot(w), w.team); } }
-      HostView.render();
+      HostView.render(); renderHiddenPanel();
       if (this.worlds.length && this.worlds.every(w => w.phase === "end")) $("btn-host-end").textContent = "결과 보기";
     },
     end() {
@@ -154,6 +159,22 @@
     if (txt) HostView.addLog(w.team, txt);
   }
 
+  // 관제 화면: 사물함에 숨은 학생 목록 → 꺼내기
+  let hiddenHtml = "";
+  function renderHiddenPanel(force) {
+    const box = $("hidden-panel"); if (!box || box.style.display === "none") return;
+    const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+    const list = []; HostGame.worlds.forEach((w, t) => { for (const p of w.players.values()) if (p.hid) list.push({ t, p, sec: Math.floor(w.elapsed - (p.hidT || 0)) }); });
+    const html = `<div class="hp-head"><b>사물함에 숨은 학생</b> <button id="btn-hide-all"${list.length ? "" : " disabled"}>모두 꺼내기</button> <button id="btn-hide-close">닫기</button></div>` +
+      (list.length ? list.map(({ t, p, sec }) => `<div class="hp-row"><span>${t + 1}팀 <b>${esc(p.name)}</b> · ${sec}초째</span><button data-out="${esc(p.id)}">꺼내기</button></div>`).join("") : `<div class="muted small">지금 숨어 있는 학생이 없습니다.</div>`);
+    if (!force && html === hiddenHtml) return; hiddenHtml = html; box.innerHTML = html;
+    box.querySelectorAll("button[data-out]").forEach(b => { b.onclick = () => HostGame.forceOut(b.dataset.out); });
+    $("btn-hide-all").onclick = () => { for (const w of HostGame.worlds) for (const p of w.players.values()) if (p.hid) HostGame.forceOut(p.id); };
+    $("btn-hide-close").onclick = () => { box.style.display = "none"; };
+  }
+  window.addEventListener("DOMContentLoaded", () => {
+    const b = $("btn-hidden"); if (b) b.onclick = () => { const box = $("hidden-panel"); box.style.display = box.style.display === "none" ? "" : "none"; renderHiddenPanel(true); };
+  });
   function updateSecondHint() {
     const h = $("second-hint"); if (!h) return; const r = HostGame.settings.requiredFuses || 9;
     const at = r <= 6 ? Math.ceil(r * 2 / 3) : Math.ceil(r / 2);

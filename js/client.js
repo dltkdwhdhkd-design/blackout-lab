@@ -246,6 +246,8 @@ window.Client = (function () {
       case "medkit": showToast(e.id === me ? "구급상자를 챙겼다. 쓰러지면 6초 뒤 혼자 일어난다." : `${e.by}이(가) 구급상자를 챙겼다.`, 3.5); break;
       case "cctv": Horror.right(); showToast(`${e.id === me ? "CCTV 켜짐" : e.by + "이(가) CCTV를 켰다"} — ${e.secs}초 동안 괴물과 셀 위치가 오른쪽 위와 지도(M)에 보인다.`, 4); break;
       case "cctvon": if (e.id === me) showToast(`CCTV는 이미 켜져 있다 (${e.left}초 남음).`, 2); break;
+      case "forced": if (e.id === me) { clearInteraction(); Horror.vibrate([60, 40, 60]); fx.shake = 0.3; showToast("선생님이 사물함에서 꺼냈다! 10초 동안 숨을 수 없다.", 4); } else showToast(`${e.name}이(가) 사물함에서 끌려 나왔다.`, 3); break;
+      case "nohide": if (e.id === me) { clearInteraction(); showToast(`아직 숨을 수 없다 (${e.left}초).`, 2); } break;
       case "cool": if (e.id === me) showToast(e.cctv ? `CCTV 재가동까지 ${e.left}초.` : `잠겨 있다. ${e.left}초 뒤 다시.`, 2); break;
       case "wake2": Horror.monsterCry("wake",.55); Horror.vibrate([100,80,200]); fx.shake=0.5; showToast(`셀 ${e.threshold}개 회수 — 2층에서 두 번째 개체가 출현했다. 계단을 조심해.`,7); break;
       case "stairs": if(e.id===me)showToast(`${e.floor}층으로 이동했다.`,2);break;

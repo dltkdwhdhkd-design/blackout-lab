@@ -76,6 +76,7 @@ window.Sim = (function () {
       }
       case "hide": {
         if (p.down || p.escaped) break;
+        if (w.elapsed < (p.noHide || 0)) { emit(w, { k: "nohide", id: from, left: Math.ceil(p.noHide - w.elapsed) }); break; }
         if (!p.hid) p.hidePrev = { x: p.x, y: p.y, a: p.a };
         p.hid = { x: m.x, y: m.y }; p.hidT = w.elapsed;
         if (m.l !== undefined) p.light = !!m.l;
@@ -370,6 +371,12 @@ window.Sim = (function () {
     }
     p.hid = null; p.hidePrev = null; p.seenHide = false;
   }
+  // 선생님이 사물함에서 강제로 꺼냄: 10초 동안 다시 못 숨는다
+  function forceOut(w, id) {
+    const p = w.players.get(id); if (!p || !p.hid) return false;
+    leaveHiding(w, p); p.noHide = w.elapsed + 10;
+    emit(w, { k: "forced", id: p.id, name: p.name }); return true;
+  }
   // 선생님이 게임 중에 다른 팀으로 옮길 때: 들고 있던 셀은 그 자리에 떨어뜨리고 이 세계에서 빠진다
   function removePlayer(w, id) {
     const p = w.players.get(id); if (!p) return null;
@@ -477,5 +484,5 @@ window.Sim = (function () {
   function secondAt(w) { const r = w.settings.requiredFuses; return r <= 6 ? Math.ceil(r * 2 / 3) : Math.ceil(r / 2); }
   function requiredMet(w) { return w.inserted >= w.settings.requiredFuses; }
 
-  return { DEFAULTS, PLAYER_SPEED, createWorld, addPlayer, removePlayer, handle, tick, snapshot, requiredMet, resumeState, clearQuestion, result };
+  return { DEFAULTS, PLAYER_SPEED, createWorld, addPlayer, removePlayer, forceOut, handle, tick, snapshot, requiredMet, resumeState, clearQuestion, result };
 })();
