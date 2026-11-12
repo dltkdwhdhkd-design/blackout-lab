@@ -424,13 +424,13 @@ window.Sim = (function () {
       }
     }
     const second = w.monsters[1];
-    if (second && second.state === "dormant" && w.fuses.filter(f=>f.fixed).length >= Math.ceil(w.fuses.length/2)) {
+    if (second && second.state === "dormant" && w.fuses.filter(f=>f.fixed).length >= secondAt(w)) {
       // 회수한 셀 기준. 2층에서 플레이어 바로 앞을 피해 출현한다.
       for(let tries=0;tries<200;tries++) { const at=MapUtil.randomFloor(); if(MapUtil.floorAt(at.x,at.y)!==2)continue;
         if([...w.players.values()].some(p=>!p.down&&!p.escaped&&MapUtil.sameFloor(p,at)&&Math.hypot(p.x-at.x,p.y-at.y)<8))continue;
         second.x=at.x;second.y=at.y;break;
       }
-      second.state="roam";second.sense=8;emit(w,{k:"wake2",floor:2,threshold:Math.ceil(w.fuses.length/2)});
+      second.state="roam";second.sense=8;emit(w,{k:"wake2",floor:2,threshold:secondAt(w)});
     }
     for (const mo of w.monsters) { if(w.phase !== "play") break; tickMonster(w, dt, mo); }
     checkEnd(w);
@@ -443,7 +443,7 @@ window.Sim = (function () {
       t: "st", team: w.team,
       ms: w.monsters.map(m=>[+m.x.toFixed(2),+m.y.toFixed(2),m.state,+m.a.toFixed(2),+m.speed.toFixed(1)]),
       second: w.monsters[1] ? (w.monsters[1].state === "dormant" ? 0 : 1) : -1,
-      totalCells: w.fuses.length,
+      totalCells: w.fuses.length, thr: secondAt(w),
       m: [+mo.x.toFixed(2), +mo.y.toFixed(2), mo.state, +mo.a.toFixed(2), +mo.speed.toFixed(1)],
       p: [...w.players.values()].map(p => [p.id, +p.x.toFixed(2), +p.y.toFixed(2), +p.a.toFixed(2), p.down ? 1 : 0, p.hid ? 1 : 0, p.escaped ? 1 : 0, p.down ? +p.rev.toFixed(1) : 0, p.light ? 1 : 0, p.carry || 0, p.medkit ? 1 : 0, p.travelRev || 0]),
       f: mask, b: w.breaker.stage, e: w.exitOpen ? 1 : 0, n: Math.round(w.noise), tm: Math.max(0, Math.round(w.time)), ph: w.phase,
@@ -454,6 +454,8 @@ window.Sim = (function () {
     };
   }
 
+  // 두 번째 괴물이 깨는 셀 수: 필요 셀이 6개 이하면 2/3, 7개 이상이면 절반 (꺼낸 셀 기준)
+  function secondAt(w) { const r = w.settings.requiredFuses; return r <= 6 ? Math.ceil(r * 2 / 3) : Math.ceil(r / 2); }
   function requiredMet(w) { return w.inserted >= w.settings.requiredFuses; }
 
   return { DEFAULTS, PLAYER_SPEED, createWorld, addPlayer, handle, tick, snapshot, requiredMet, resumeState, clearQuestion, result };

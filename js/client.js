@@ -471,7 +471,7 @@ window.Client = (function () {
       el("hud-time").textContent = fmt(S.tm);
       const md = Math.hypot(mon.x - pos.x, mon.y - pos.y);
       el("hud-noise").style.width = (mon.state === "sleep" ? 0 : Math.max(0, 100 - md * 8)) + "%";
-      el("hud-safe").textContent = (S.safe > 0 ? `아직 조용하다 … ${S.safe} · ` : "") + (S.second===0?`두 번째 개체: 셀 ${fixed}/${Math.ceil(S.totalCells/2)}개 회수 시 출현`:S.second===1?"두 번째 개체 출현 · 두 층 모두 주의":"");
+      el("hud-safe").textContent = (S.safe > 0 ? `아직 조용하다 … ${S.safe} · ` : "") + (S.second===0?`두 번째 개체: 셀 ${fixed}/${S.thr}개 회수 시 출현`:S.second===1?"두 번째 개체 출현 · 두 층 모두 주의":"");
       el("hud-team").innerHTML = S.p.map((p, i) => `<span class="${p[4] ? 'dn' : ''} ${p[6] ? 'esc' : ''}" style="color:${colors[i % colors.length]}">${p[6] ? "✓" : p[4] ? "✕" : "●"} ${names[p[0]] || "?"} (${MapUtil.floorAt(p[1],p[2])}층)</span>`).join(" ");
     }
     el("btn-light").classList.toggle("on", lightOn);
