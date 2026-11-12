@@ -267,7 +267,7 @@ window.Client = (function () {
           if(d<22)Horror.researcherScream(0,pan,.5*(1-d/22)*(MapUtil.los(pos.x,pos.y,victim.x,victim.y)?1:.4),"effect");
         }
         showToast(`${e.name}이(가) 쓰러졌다. 찾아가서 구해야 한다.`, 4); fx.shake = 0.6; } break;
-      case "revived": if (e.id === me) { clearInteraction(); finishScare(); down = false; fx.fade = 1; showToast(e.self ? "정신이 돌아왔다." : "팀원이 깨워 줬다.", 3); } else showToast(`${names[e.id] || "팀원"}이(가) 일어났다.`, 2); break;
+      case "revived": if (e.id === me) { clearInteraction(); finishScare(); down = false; fx.fade = 1; showToast((e.self ? "정신이 돌아왔다." : "팀원이 깨워 줬다.") + " 3초 동안은 괴물이 못 알아챈다 — 도망쳐!", 3); } else showToast(`${names[e.id] || "팀원"}이(가) 일어났다.`, 2); break;
       case "exit": Horror.right(); showToast("발전기 가동! 보안 출구가 열렸다. 남동쪽 끝, 보안 출구로.", 5); break;
       case "escaped": if (e.id === me) { escaped = true; Horror.lightsOn(); } else showToast(`${e.name} 탈출 성공`, 2.5); break;
       case "end": Horror.silenceScene(); phase = "end"; if (!endDelivered) { endDelivered = true; if (onEnd) onEnd(e); } break;

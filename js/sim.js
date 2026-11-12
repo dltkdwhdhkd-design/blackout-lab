@@ -231,6 +231,7 @@ window.Sim = (function () {
       let best = null, bd = 99, lit = null, ld = 99;
       for (const p of w.players.values()) {
         if (p.down || p.escaped || !MapUtil.sameFloor(p,mo)) continue;
+        if (w.elapsed < (p.safeUntil || 0)) continue;   // 막 일어난 3초 동안은 괴물이 알아채지 못한다
         const d = Math.hypot(p.x - mo.x, p.y - mo.y);
         if (p.hid) {
           // 숨는 걸 봤거나, 지금도 틈으로 불빛이 새고 있으면 바로 앞에서 끌어낸다
@@ -268,7 +269,7 @@ window.Sim = (function () {
       if (mo.state !== "hunt") mo.lightId = null;
       if (!best && mo.state === "roam") {
         for (const p of w.players.values()) {
-          if (p.down || p.escaped || p.hid) continue;
+          if (p.down || p.escaped || p.hid || w.elapsed < (p.safeUntil || 0)) continue;
           if (w.elapsed - p.lastPos < 0.3 && Math.hypot(p.x - mo.x, p.y - mo.y) < 5.5 && Math.random() < 0.5) {
             mo.state = "hunt"; mo.target = { x: p.x, y: p.y }; mo.path = MapUtil.bfs(mo.x, mo.y, p.x, p.y) || []; emit(w, { k: "hunt" }); break;
           }
@@ -285,7 +286,7 @@ window.Sim = (function () {
 
     if (mo.state === "chase") {
       const t = w.players.get(mo.targetId);
-      if (!t || t.down || t.escaped || t.hid) { mo.state = "search"; mo.target = mo.lastSeen || { x: mo.x, y: mo.y }; mo.path = MapUtil.bfs(mo.x, mo.y, mo.target.x, mo.target.y) || []; mo.timer = 3; return; }
+      if (!t || t.down || t.escaped || t.hid || w.elapsed < (t.safeUntil || 0)) { mo.state = "search"; mo.target = mo.lastSeen || { x: mo.x, y: mo.y }; mo.path = MapUtil.bfs(mo.x, mo.y, mo.target.x, mo.target.y) || []; mo.timer = 3; return; }
       if (!MapUtil.sameFloor(mo,t)) {
         mo.repath -= dt;
         if (mo.repath <= 0 || !mo.path.length) { mo.path = MapUtil.bfs(mo.x,mo.y,t.x,t.y) || []; mo.repath=1; }
@@ -318,7 +319,7 @@ window.Sim = (function () {
     mo.sense = (mo.sense === undefined ? 35 : mo.sense) - dt;
     if (mo.sense <= 0) {
       mo.sense = 28 + Math.random() * 24;
-      const cands = [...w.players.values()].filter(p => !p.down && !p.escaped && !p.hid);
+      const cands = [...w.players.values()].filter(p => !p.down && !p.escaped && !p.hid && w.elapsed >= (p.safeUntil || 0));
       if (cands.length) {
         const p = cands[Math.floor(Math.random() * cands.length)];
         const path = MapUtil.bfs(mo.x, mo.y, p.x + (Math.random() - 0.5) * 4, p.y + (Math.random() - 0.5) * 4) || MapUtil.bfs(mo.x, mo.y, p.x, p.y);
@@ -433,10 +434,10 @@ window.Sim = (function () {
     // 구조 / 자연 회복
     for (const p of w.players.values()) {
       if (p.down) {
-        if (w.elapsed - p.revT < 0.35) { p.rev += dt; if (p.rev >= 3) { p.down = false; p.rev = 0; emit(w, { k: "revived", id: p.id, by: p.reviver }); } }
+        if (w.elapsed - p.revT < 0.35) { p.rev += dt; if (p.rev >= 3) { p.down = false; p.rev = 0; p.safeUntil = w.elapsed + 3; emit(w, { k: "revived", id: p.id, by: p.reviver }); } }
         else p.rev = Math.max(0, p.rev - dt * 0.5);
-        if (w.elapsed - p.downT > 45) { p.down = false; p.rev = 0; emit(w, { k: "revived", id: p.id, self: true }); }
-        else if (p.medkit && w.elapsed - p.downT > 6) { p.down = false; p.rev = 0; p.medkit = false; emit(w, { k: "revived", id: p.id, self: true, med: true }); }
+        if (w.elapsed - p.downT > 45) { p.down = false; p.rev = 0; p.safeUntil = w.elapsed + 3; emit(w, { k: "revived", id: p.id, self: true }); }
+        else if (p.medkit && w.elapsed - p.downT > 6) { p.down = false; p.rev = 0; p.medkit = false; p.safeUntil = w.elapsed + 3; emit(w, { k: "revived", id: p.id, self: true, med: true }); }
       } else if (!p.escaped && !p.hid && p.carry < 2 && w.drops.length) {
         // 떨어진 셀 위를 지나가면 줍는다
         for (const d of w.drops) { if (d.n <= 0 || Math.hypot(d.x - p.x, d.y - p.y) > 0.9) continue; const take = Math.min(d.n, 2 - p.carry); d.n -= take; p.carry += take; emit(w, { k: "pickup", id: p.id, name: p.name, n: take }); if (p.carry >= 2) break; }
