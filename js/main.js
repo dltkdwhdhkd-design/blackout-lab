@@ -136,7 +136,8 @@
       }
       this.snapAcc += dt;
       if (this.snapAcc >= 0.1) { this.snapAcc = 0; for (const w of this.worlds) { MapUtil.use(w.mapState); Net.sendToClients(Sim.snapshot(w), w.team); } }
-      HostView.render(); renderHiddenPanel(); this.restoreLocal();
+      this.viewTick = (this.viewTick || 0) + 1; if (this.viewTick % 2 === 0) { HostView.render(); renderHiddenPanel(); }   // 관제 그림은 초당 10번이면 충분
+      this.restoreLocal();
       if (this.worlds.length && this.worlds.every(w => w.phase === "end")) $("btn-host-end").textContent = "결과 보기";
     },
     end() {

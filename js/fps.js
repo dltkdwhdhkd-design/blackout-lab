@@ -3,8 +3,13 @@ window.Fps = (function () {
   let buf, bctx, RW = 320, RH = 180, zbuf = null, tmp = null, tctx = null;
   const FOV = 0.72; // 카메라 평면 반폭 (약 72°)
 
+  // 화질: 내부 해상도(가로 픽셀 수). 패드·폰은 자동으로 한 단계 낮춘다
+  function cap() {
+    const q = window.Options ? Options.get("quality") : "auto";
+    return q === "high" ? 420 : q === "mid" ? 320 : q === "low" ? 240 : (navigator.maxTouchPoints > 0 ? 320 : 420);
+  }
   function setup(W, H) {
-    RW = Math.min(420, Math.max(240, Math.floor(W / 2.6)));
+    RW = Math.min(cap(), Math.max(200, Math.floor(W / 2.6)));
     RH = Math.round(RW * H / W);
     if (!buf) { buf = document.createElement("canvas"); bctx = buf.getContext("2d"); }
     buf.width = RW; buf.height = RH; zbuf = new Float32Array(RW);
@@ -29,7 +34,7 @@ window.Fps = (function () {
 
   // st: {pos:{x,y,a}, fuses, fmask, exitOpen, flicker, monster:{x,y,state,speed}, others:[...], now, downed}
   function render(ctx, W, H, st) {
-    if (!buf || buf.width !== Math.min(420, Math.max(240, Math.floor(W / 2.6)))) setup(W, H);
+    if (!buf || buf.width !== Math.min(cap(), Math.max(200, Math.floor(W / 2.6)))) setup(W, H);
     const g = bctx;
     const p = st.pos;
     const dirX = Math.cos(p.a), dirY = Math.sin(p.a);
@@ -159,12 +164,17 @@ window.Fps = (function () {
       if (tmp.width < tw || tmp.height < th) { tmp.width = Math.max(tmp.width, tw); tmp.height = Math.max(tmp.height, th); tctx.imageSmoothingEnabled = false; }
       tctx.globalCompositeOperation = "source-over"; tctx.clearRect(0, 0, tw, th);
       const sy0 = (vy0 - top) / sh * img.height, shh = th / sh * img.height;
-      let any = false;
-      for (let x = cx0; x < cx1; x++) {
-        if (trY >= zbuf[x]) continue;
-        const texX = Math.min(img.width - 1, Math.floor((x - x0) / (x1 - x0) * img.width));
-        tctx.drawImage(img, texX, sy0, 1, shh, x - cx0, 0, 1, th);
-        any = true;
+      // 벽에 가리지 않은 연속 구간을 한 번에 그린다 (열마다 그리면 매우 느림)
+      let any = false, run = -1;
+      const sxPer = img.width / (x1 - x0);
+      for (let x = cx0; x <= cx1; x++) {
+        const vis = x < cx1 && trY < zbuf[x];
+        if (vis && run < 0) run = x;
+        else if (!vis && run >= 0) {
+          const a = (run - x0) * sxPer, bw = Math.max(1e-3, (x - run) * sxPer);
+          tctx.drawImage(img, a, sy0, Math.min(bw, img.width - a), shh, run - cx0, 0, x - run, th);
+          any = true; run = -1;
+        }
       }
       if (!any) continue;
       if (b < 0.98) { tctx.globalCompositeOperation = "source-atop"; tctx.fillStyle = `rgba(0,0,0,${1 - b})`; tctx.fillRect(0, 0, tw, th); }

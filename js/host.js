@@ -44,21 +44,27 @@ window.HostView = (function () {
     ctx.fillText(`${idx + 1}팀 · ${selectedFloor}층  ${status}`, x, y - 8, wd);
     ctx.fillStyle = "#aaa"; ctx.font = "12px sans-serif"; ctx.textAlign = "left";
     ctx.fillText(alive.map(p => (p.escaped ? "✓" : p.down ? "✕" : "●") + p.name + `(${MapUtil.floorAt(p.x,p.y)}층)`).join("  "), x, y+8,wd);
-    // 맵
-    for (let ty = floor.y0; ty <= floor.y1; ty++) for (let tx = 0; tx < MAP_W; tx++) {
-      const t = MapUtil.tile(tx, ty);
-      const rm = MapUtil.roomAt(tx + 0.5, ty + 0.5) || {}; ctx.fillStyle = t === "#" ? "#262a31" : rm.tex === "hall" ? "#3b4049" : rm.tex === "contain" ? "#4a3a3a" : rm.tex === "power" ? "#3a3f38" : "#4a4238";
-      if (t === "E") ctx.fillStyle = w.exitOpen ? "#2e8b3a" : "#7a2020";
-      if (t === "L") ctx.fillStyle = "#33404f";
-      if (window.PROPS && PROPS[t]) ctx.fillStyle = PROPS[t].tall ? "#4d4a44" : "#5a5650";
-      ctx.fillRect(ox + tx * T, oy + ty * T, T, T);
+    // 맵 (고정된 부분은 한 번만 그려 두고 재사용 — 팀이 많으면 매번 칸마다 그리는 게 매우 느렸다)
+    const key = `${selectedFloor}|${T.toFixed(3)}|${w.exitOpen ? 1 : 0}`;
+    if (!w._base || w._baseKey !== key) {
+      const bc = w._base || document.createElement("canvas"); bc.width = Math.ceil(MAP_W * T); bc.height = Math.ceil(height * T);
+      const bx = bc.getContext("2d"), oy0 = -floor.y0 * T;
+      for (let ty = floor.y0; ty <= floor.y1; ty++) for (let tx = 0; tx < MAP_W; tx++) {
+        const t = MapUtil.tile(tx, ty);
+        const rm = MapUtil.roomAt(tx + 0.5, ty + 0.5) || {}; bx.fillStyle = t === "#" ? "#262a31" : rm.tex === "hall" ? "#3b4049" : rm.tex === "contain" ? "#4a3a3a" : rm.tex === "power" ? "#3a3f38" : "#4a4238";
+        if (t === "E") bx.fillStyle = w.exitOpen ? "#2e8b3a" : "#7a2020";
+        if (t === "L") bx.fillStyle = "#33404f";
+        if (window.PROPS && PROPS[t]) bx.fillStyle = PROPS[t].tall ? "#4d4a44" : "#5a5650";
+        bx.fillRect(tx * T, oy0 + ty * T, T + 0.5, T + 0.5);
+      }
+      for (const st of MapUtil.stairs) if (st.floor === selectedFloor) { bx.fillStyle = "#7fffc5"; bx.fillRect(st.x * T, oy0 + st.y * T, T, T); bx.font = "bold 10px sans-serif"; bx.textAlign = st.x < MAP_W / 2 ? "left" : "right"; bx.fillText(`${st.id.endsWith("0") ? "A" : "B"}→${st.to.floor}층`, (st.x + (st.x < MAP_W / 2 ? 2 : -1)) * T, oy0 + st.y * T); }
+      bx.fillStyle = "rgba(255,255,255,0.25)"; bx.font = `${Math.max(8, T * 1.3)}px sans-serif`; bx.textAlign = "center";
+      for (const r of ROOMS) if (r.floor === selectedFloor && !(r.baseId || r.id).startsWith("hall")) bx.fillText(r.name, (r.x0 + r.x1 + 1) / 2 * T, oy0 + (r.y0 + r.y1 + 1) / 2 * T + T * 1.5);
+      w._base = bc; w._baseKey = key;
     }
+    ctx.drawImage(w._base, ox, oy + floor.y0 * T);
     for (const f of w.fuses) { if(!onFloor(f))continue; ctx.fillStyle = f.fixed ? "#58ff7a" : "#ff4040"; ctx.fillRect(ox + f.x * T + T * 0.2, oy + f.y * T + T * 0.2, T * 0.6, T * 0.6); }
     const b = MapUtil.find("B")[0]; ctx.fillStyle = w.exitOpen ? "#58ff7a" : "#ffb020"; if(onFloor(b))ctx.fillRect(ox + b.x * T, oy + b.y * T, T, T);
-    for(const st of MapUtil.stairs)if(onFloor(st)){ctx.fillStyle="#7fffc5";ctx.fillRect(ox+st.x*T,oy+st.y*T,T,T);ctx.font="bold 10px sans-serif";ctx.textAlign=st.x<MAP_W/2?"left":"right";ctx.fillText(`${st.id.endsWith("0")?"A":"B"}→${st.to.floor}층`,ox+(st.x+(st.x<MAP_W/2?2:-1))*T,oy+st.y*T);}
-    // 방 이름
-    ctx.fillStyle = "rgba(255,255,255,0.25)"; ctx.font = `${Math.max(8, T * 1.3)}px sans-serif`; ctx.textAlign = "center";
-    for (const r of ROOMS) if (r.floor===selectedFloor && !(r.baseId||r.id).startsWith("hall")) ctx.fillText(r.name, ox + (r.x0 + r.x1 + 1) / 2 * T, oy + (r.y0 + r.y1 + 1) / 2 * T + T * 1.5);
     // 플레이어
     let i = 0;
     for (const p of w.players.values()) {

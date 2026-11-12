@@ -1,6 +1,6 @@
 // 설정: 소리, 감도, 진동 — 이 기기 브라우저에 저장
 window.Options = (function () {
-  const DEF = { vol: 0.9, amb: 1.0, mouseSens: 1.0, touchSens: 1.0, invertY: false, vib: true };
+  const DEF = { vol: 0.9, amb: 1.0, mouseSens: 1.0, touchSens: 1.0, invertY: false, vib: true, quality: "auto" };
   const KEY = "blackoutlab.options.v1";
   let v = { ...DEF }, open = false, onClose = null;
   try { const s = JSON.parse(localStorage.getItem(KEY) || "{}"); for (const k in DEF) if (k in s) v[k] = s[k]; } catch (e) {}
@@ -26,6 +26,7 @@ window.Options = (function () {
     }
     $("opt-invert").checked = v.invertY; $("opt-invert").onchange = () => { v.invertY = $("opt-invert").checked; save(); };
     $("opt-vib").checked = v.vib; $("opt-vib").onchange = () => { v.vib = $("opt-vib").checked; save(); if (v.vib) Horror.vibrate(60); };
+    $("opt-quality").value = v.quality; $("opt-quality").onchange = () => { v.quality = $("opt-quality").value; save(); };
     $("opt-test").onclick = () => enableSound();
     $("opt-repair").onclick = () => enableSound(true);
     $("opt-sound-preview").onclick = async () => {
