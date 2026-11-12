@@ -244,9 +244,9 @@ window.Client = (function () {
       case "drop": showToast(`${e.id === me ? "들고 있던" : e.name + "이(가) 들고 있던"} 셀 ${e.n}개가 바닥에 떨어졌다. 지도에 표시된다.`, 3.5); break;
       case "pickup": if (e.id === me) showToast(`떨어진 셀 ${e.n}개를 주웠다.`, 2.5); break;
       case "medkit": showToast(e.id === me ? "구급상자를 챙겼다. 쓰러지면 6초 뒤 혼자 일어난다." : `${e.by}이(가) 구급상자를 챙겼다.`, 3.5); break;
-      case "cctv": Horror.right(); if (e.id === me && modal) modalResult(true); showToast(`CCTV 접속 — ${e.secs}초 동안 괴물과 남은 장비 위치가 화면 위에 보인다.`, 4); break;
+      case "cctv": Horror.right(); showToast(`${e.id === me ? "CCTV 켜짐" : e.by + "이(가) CCTV를 켰다"} — ${e.secs}초 동안 괴물과 셀 위치가 오른쪽 위와 지도(M)에 보인다.`, 4); break;
       case "cctvon": if (e.id === me) showToast(`CCTV는 이미 켜져 있다 (${e.left}초 남음).`, 2); break;
-      case "cool": if (e.id === me) showToast(`잠겨 있다. ${e.left}초 뒤 다시.`, 2); break;
+      case "cool": if (e.id === me) showToast(e.cctv ? `CCTV 재가동까지 ${e.left}초.` : `잠겨 있다. ${e.left}초 뒤 다시.`, 2); break;
       case "wake2": Horror.monsterCry("wake",.55); Horror.vibrate([100,80,200]); fx.shake=0.5; showToast(`셀 ${e.threshold}개 회수 — 2층에서 두 번째 개체가 출현했다. 계단을 조심해.`,7); break;
       case "stairs": if(e.id===me)showToast(`${e.floor}층으로 이동했다.`,2);break;
       case "wake": Horror.monsterCry("wake",-.45); fx.shake = 1; showToast("…건물 어딘가에서 무언가가 깨어났다.", 4); Horror.vibrate([80, 60, 200]); break;
@@ -533,7 +533,8 @@ window.Client = (function () {
     const mw=Math.min(W*.34,300),k=mw/img.width,mh=img.height*k,ox=W-mw-10,top=64,u=k*8,oy=top-f.y0*u;
     c.save();c.globalAlpha=.88;c.fillStyle="#000";c.fillRect(ox-4,top-20,mw+8,mh+24);c.drawImage(img,ox,top,mw,mh);c.globalAlpha=1;
     drawMarks(c,ox,oy,u,now,floor);c.fillStyle="#9bdcff";c.beginPath();c.arc(ox+pos.x*u,oy+pos.y*u,Math.max(3,u*.7),0,7);c.fill();
-    c.fillStyle="#ff6060";c.font="bold 12px sans-serif";c.textAlign="left";c.fillText(`● CCTV ${floor}층 · ${S.cc}s`,ox,top-6);c.restore();
+    const other=monsters.filter(m=>!['sleep','dormant'].includes(m.state)&&MapUtil.floorAt(m.x,m.y)!==floor).length;
+    c.fillStyle="#ff6060";c.font="bold 12px sans-serif";c.textAlign="left";c.fillText(`● CCTV ${floor}층 · ${S.cc}s${other?` · ${floor===1?2:1}층에 괴물 ${other}`:""}`,ox,top-6);c.restore();
   }
   function drawMap(c,now){
     const floor=mapFloor,f=MapUtil.floorInfo(floor),img=buildMap(floor);

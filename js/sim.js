@@ -98,15 +98,13 @@ window.Sim = (function () {
           b.busy = from; b.busyT = w.elapsed; b.unit = unit; b.qi = qi; b.perm = shuffledPerm(QUESTION_BANK[unit].items[qi].c.length);
           emit(w, { k: "q", id: from, fuse: -1, unit, qi, perm: b.perm, stage: b.stage });
         } else if (m.fuse === -2) {
-          // CCTV 관제석: 맞히면 20초 동안 팀 전체에 괴물·장비 위치가 보인다
+          // CCTV 관제석: 누르면 20초 동안 팀 전체에 괴물·셀 위치가 보인다
           const c = w.cctv;
           if (w.elapsed < c.until) { emit(w, { k: "cctvon", id: from, left: Math.ceil(c.until - w.elapsed) }); break; }
-          if (w.elapsed < c.cool) { emit(w, { k: "cool", id: from, left: Math.ceil(c.cool - w.elapsed) }); break; }
-          if (c.busy && c.busy !== from && w.elapsed - c.busyT < 30) break;
-          const unit = ALL_UNITS()[Math.floor(Math.random() * ALL_UNITS().length)];
-          const qi = pickQuestion(w, unit);
-          c.busy = from; c.busyT = w.elapsed; c.unit = unit; c.qi = qi; c.perm = shuffledPerm(QUESTION_BANK[unit].items[qi].c.length);
-          emit(w, { k: "q", id: from, fuse: -2, unit, qi, perm: c.perm });
+          if (w.elapsed < c.cool) { emit(w, { k: "cool", id: from, cctv: 1, left: Math.ceil(c.cool - w.elapsed) }); break; }
+          // 문제 없이 누르면 바로 켜진다: 20초 동안 팀 전원에게, 다시 쓰려면 1분
+          c.until = w.elapsed + 20; c.cool = w.elapsed + 60; c.busy = null;
+          emit(w, { k: "cctv", id: from, by: p.name, secs: 20 });
         } else {
           const f = w.fuses[m.fuse]; if (!f || f.fixed) break;
           if (p.carry >= 2) { emit(w, { k: "full", id: from }); break; }
