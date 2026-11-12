@@ -66,6 +66,13 @@
       this.sendGo(id, null, true);
       renderConsoleTeams();
     },
+    // 대기실에서 내보내기: 목록에서 빼고 그 학생 화면을 입장 화면으로 돌려보낸다(다시 들어오는 건 가능)
+    kick(id) {
+      const p = this.players.get(id); if (!p || this.started) return;
+      this.players.delete(id);
+      Net.sendToClients({ t: "kicked", to: id });
+      this.broadcastLobby();
+    },
     compactTeams() { // 빈 팀 번호를 당겨서 1팀부터 차례로
       const used = [...new Set([...this.players.values()].map(p => p.team))].sort((a, b) => a - b);
       for (const p of this.players.values()) p.team = used.indexOf(p.team);
@@ -155,6 +162,11 @@
   window.addEventListener("DOMContentLoaded", () => {
     const b = $("btn-console-teams"); if (b) b.onclick = () => { const box = $("console-teams"); box.style.display = box.style.display === "none" ? "" : "none"; renderConsoleTeams(); };
   });
+  function updateSecondHint() {
+    const h = $("second-hint"); if (!h) return; const r = HostGame.settings.requiredFuses || 9;
+    const at = r <= 6 ? Math.ceil(r * 2 / 3) : Math.ceil(r / 2);
+    h.textContent = HostGame.settings.monsterCount === 1 ? "괴물은 1마리입니다. 발전기와 탈출구는 1층에 있습니다." : `두 번째 개체는 셀 ${at}개를 꺼내면 2층에서 출현합니다. 1층에는 장비 ${Math.max(1, Math.floor(r / 2))}개뿐이라 나머지는 2층에서 가져와야 합니다.`;
+  }
   let lastLobbyHtml = null;
   function renderHostLobby() {
     const byTeam = {};
@@ -163,10 +175,11 @@
     const nT = keys.length ? Math.max(...keys.map(Number)) + 1 : 1;
     const opt = (cur) => Array.from({ length: nT + 1 }, (_, t) => `<option value="${t}"${t === cur ? " selected" : ""}>${t < nT ? t + 1 + "팀" : "새 팀"}</option>`).join("");
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-    const html = keys.length ? keys.map(k => `<div class="team"><b>${+k + 1}팀</b> <span class="muted">${byTeam[k].length}명</span><div class="team-list">${byTeam[k].map(p => `<label class="mem">${esc(p.name)} <select data-id="${esc(p.id)}">${opt(+k)}</select></label>`).join("")}</div></div>`).join("") : `<div class="muted">학생들이 접속하면 여기에 보입니다.</div>`;
+    const html = keys.length ? keys.map(k => `<div class="team"><b>${+k + 1}팀</b> <span class="muted">${byTeam[k].length}명</span><div class="team-list">${byTeam[k].map(p => `<div class="mem"><span class="nm">${esc(p.name)}</span> <select data-id="${esc(p.id)}" title="팀 옮기기">${opt(+k)}</select><button class="kick" data-kick="${esc(p.id)}" title="내보내기">내보내기</button></div>`).join("")}</div></div>`).join("") : `<div class="muted">학생들이 접속하면 여기에 보입니다.</div>`;
     if (html === lastLobbyHtml) { $("lobby-count").textContent = HostGame.players.size + "명"; return; }  // 고르는 중에 목록이 다시 그려져 닫히지 않게
     lastLobbyHtml = html; $("lobby-teams").innerHTML = html;
     $("lobby-teams").querySelectorAll("select[data-id]").forEach(sel => { sel.onchange = () => HostGame.moveTeam(sel.dataset.id, +sel.value); });
+    $("lobby-teams").querySelectorAll("button[data-kick]").forEach(bt => { bt.onclick = () => { const p = HostGame.players.get(bt.dataset.kick); if (p && confirm(`${p.name} 학생을 내보낼까요?`)) HostGame.kick(bt.dataset.kick); }; });
     $("lobby-count").textContent = HostGame.players.size + "명";
   }
 
@@ -199,9 +212,10 @@
     for (const id in map) {
       const el = $(id); const [key, mul] = map[id];
       el.value = HostGame.settings[key] / mul;
-      el.oninput = () => { HostGame.settings[key] = +el.value * mul; if (key === "teamSize") { HostGame.assignTeams(true); HostGame.broadcastLobby(); } $(id + "-v") && ($(id + "-v").textContent = el.value); };
+      el.oninput = () => { HostGame.settings[key] = +el.value * mul; updateSecondHint(); if (key === "teamSize") { HostGame.assignTeams(true); HostGame.broadcastLobby(); } $(id + "-v") && ($(id + "-v").textContent = el.value); };
       $(id + "-v") && ($(id + "-v").textContent = el.value);
     }
+    updateSecondHint();
   }
   $("btn-shuffle").onclick = () => { HostGame.assignTeams(true); HostGame.broadcastLobby(); };
   $("btn-start").onclick = () => {
@@ -298,6 +312,10 @@
 
   function clientRecv(d, from) {
     if (!d || ending || (d.to && d.to !== Net.id)) return;
+    if (d.t === "kicked") {
+      if (gameStarted) return;
+      forgetSession(); cancelJoin(); show("join"); $("join-msg").textContent = "선생님이 대기실에서 내보냈습니다. 이름을 확인하고 다시 들어오세요."; return;
+    }
     if (d.t === "join-error" && activeSession && d.requestId === syncRequest) {
       const message = d.reason; forgetSession(); cancelJoin(); $("join-msg").textContent = message; return;
     }

@@ -24,7 +24,7 @@ input, select { font: inherit; background: #0d0e11; color: #eee; border: 1px sol
 .panel.wide { width: min(96vw, 900px); }
 .code { font-size: 3rem; font-weight: 800; letter-spacing: 0.2em; color: #ff4a4a; font-family: ui-monospace, monospace; }
 .code.small-code { font-size: 1.6rem; letter-spacing: 0; color: #ddd; }
-.teams { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin: 16px 0; }
+.teams { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin: 16px 0; }
 .team { background: #15161b; border: 1px solid #2a2b33; border-radius: 6px; padding: 10px; }
 .settings { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px 20px; margin: 10px 0; }
 .settings label { font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
@@ -126,3 +126,6 @@ input[type=range], input[type=checkbox] { accent-color: #b52222; }
 #console-teams .ct-head button { margin-left: auto; }
 @media (max-width: 800px) { #console-teams { right: 0; } }
 #console-teams .mem { white-space: nowrap; }
+.team .mem .nm { white-space: nowrap; font-weight: 600; }
+.team .mem .kick { white-space: nowrap; background: #3a1416; color: #ffb0b0; border: 1px solid #6a2a2e; border-radius: 3px; font-size: 13px; padding: 2px 6px; cursor: pointer; }
+.team .team-list { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
