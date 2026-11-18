@@ -222,6 +222,8 @@
     $("spec-mapflag").style.display = p.mapOpen ? "" : "none";
   }
   window.addEventListener("DOMContentLoaded", () => {
+    const bm = $("btn-showmon"), lab = () => { bm.textContent = HostView.showMon ? "괴물 위치 숨기기" : "괴물 위치 보이기"; bm.classList.toggle("on", !HostView.showMon); };
+    lab(); bm.onclick = () => { HostView.setShowMon(!HostView.showMon); lab(); HostView.render(); };
     $("spec-select").onfocus = specMenu;
     $("spec-select").onchange = () => { const v = $("spec-select").value; if (v) specOpen(v); };
     $("spec-close").onclick = specClose; $("spec-prev").onclick = () => specStep(-1); $("spec-next").onclick = () => specStep(1);

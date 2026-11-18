@@ -135,3 +135,4 @@ input[type=range], input[type=checkbox] { accent-color: #b52222; }
 #spec-mapflag { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); color: #ff6b6b; font: 700 22px sans-serif; pointer-events: none; }
 #spec-select { max-width: 170px; }
 @media (max-width: 800px) { #spectate { width: calc(100vw - 16px); } }
+#btn-showmon.on { background: #5a1a1e; color: #ffd0d0; border-color: #a33; }

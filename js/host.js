@@ -77,10 +77,10 @@ window.HostView = (function () {
       i++;
     }
     for (const d of w.drops || []) { if(!onFloor(d))continue; ctx.fillStyle = "#7ff6ff"; ctx.beginPath(); ctx.arc(ox + d.x * T, oy + d.y * T, T * 0.5, 0, 7); ctx.fill(); }
-    // 괴물
-    for (const [mi,m] of w.monsters.entries()) {
+    // 괴물 (교사 화면을 학생들이 볼 수 있으니 끌 수 있다)
+    if (showMon) for (const [mi,m] of w.monsters.entries()) {
     if(!onFloor(m))continue;
-    if(m.state === "dormant"){ctx.fillStyle="#e6b96a";ctx.font="11px sans-serif";ctx.fillText(`개체 2: 셀 ${fixed}/${Math.ceil(w.fuses.length/2)}`,ox+m.x*T,oy+m.y*T);continue;}
+    if(m.state === "dormant"){ctx.fillStyle="#e6b96a";ctx.font="11px sans-serif";ctx.fillText(`개체 2: 셀 ${fixed}/${(r => r <= 6 ? Math.ceil(r * 2 / 3) : Math.ceil(r / 2))(w.settings.requiredFuses)}`,ox+m.x*T,oy+m.y*T);continue;}
     if (m.state !== "sleep") {
       ctx.fillStyle = m.state === "chase" ? "#ff2020" : "#b05aff";
       ctx.beginPath(); ctx.moveTo(ox + m.x * T, oy + m.y * T - T * 0.8); ctx.lineTo(ox + m.x * T + T * 0.6, oy + m.y * T + T * 0.5); ctx.lineTo(ox + m.x * T - T * 0.6, oy + m.y * T + T * 0.5); ctx.fill();
@@ -111,5 +111,7 @@ window.HostView = (function () {
     });
     return html;
   }
-  return { init, render, addLog, results };
+  let showMon = true; try { showMon = localStorage.getItem("blackoutlab.showMon") !== "0"; } catch (e) {}
+  function setShowMon(v) { showMon = !!v; try { localStorage.setItem("blackoutlab.showMon", showMon ? "1" : "0"); } catch (e) {} }
+  return { init, render, addLog, results, setShowMon, get showMon() { return showMon; } };
 })();
