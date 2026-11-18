@@ -90,7 +90,10 @@ window.Client = (function () {
     g.putImageData(img, 0, 0);
   }
 
-  function toggleMap() { mapOpen = !mapOpen; if(mapOpen) mapFloor=MapUtil.floorAt(pos.x,pos.y); }
+  function toggleMap() {
+    if (!mapOpen && settings && settings.fullMap === 0) { showToast("이번 판은 전체 지도를 쓸 수 없다. CCTV실에서만 위치를 볼 수 있다.", 3); return; }
+    mapOpen = !mapOpen; if(mapOpen) mapFloor=MapUtil.floorAt(pos.x,pos.y);
+  }
   // ---------- 입력: 왼쪽 스틱 이동, 오른쪽 드래그 회전 ----------
   function setupInput() {
     if (inputBound) return; inputBound = true;
@@ -435,7 +438,7 @@ window.Client = (function () {
     for (const o of others.values()) { o.x += (o.tx - o.x) * Math.min(1, dt * 10); o.y += (o.ty - o.y) * Math.min(1, dt * 10); }
     for(const m of monsters){m.x+=(m.tx-m.x)*Math.min(1,dt*8);m.y+=(m.ty-m.y)*Math.min(1,dt*8);}
     mon=closestMonster();
-    if (now - lastPos > 100 && !stairPending && !down && !escaped) { lastPos = now; Net.sendToHost({ t: "pos", x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), a: +pos.a.toFixed(2), l: lightOn ? 1 : 0, rev:travelRev }); }
+    if (now - lastPos > 100 && !stairPending && !down && !escaped) { lastPos = now; Net.sendToHost({ t: "pos", x: +pos.x.toFixed(2), y: +pos.y.toFixed(2), a: +pos.a.toFixed(2), l: lightOn ? 1 : 0, m: mapOpen ? mapFloor : 0, k: +look.toFixed(2), rev:travelRev }); }
     if (holdRev && now - lastRev > 100) { lastRev = now; Net.sendToHost({ t: "rev", target: holdRev }); }
     if (holdRev) { const o = others.get(holdRev); if (!o || !o.down || Math.hypot(o.x - pos.x, o.y - pos.y) > 1.7) holdRev = false; }
     if (modal && !modal.answered && now - modal.t0 > 20000) answer(-1);

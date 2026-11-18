@@ -2,7 +2,7 @@
 window.Sim = (function () {
   const PLAYER_SPEED = 3.0;
   const INTRO_LEN = 15;
-  const DEFAULTS = { timeLimit: 1200, monsterCount: 2, safeTime: 75, monsterSpeed: 1.0, requiredFuses: 9, teamSize: 4, scare: 2, intro: 1, mapMode: 2 };
+  const DEFAULTS = { timeLimit: 1200, monsterCount: 2, safeTime: 75, monsterSpeed: 1.0, requiredFuses: 9, teamSize: 4, scare: 2, intro: 1, mapMode: 2, fullMap: 1 };
 
   function createWorld(team, settings) {
     const mf = MapUtil.find("M")[0];
@@ -65,6 +65,7 @@ window.Sim = (function () {
         if (Math.hypot(m.x - p.x, m.y - p.y) > 0.02) p.lastPos = w.elapsed; // 실제로 움직였을 때만 '발소리'
         p.x = m.x; p.y = m.y; p.a = m.a;
         if (m.l !== undefined) p.light = !!m.l;
+        p.mapOpen = m.m || 0; p.look = +m.k || 0; p.mapSince = p.mapOpen ? (p.mapSince || w.elapsed) : 0;   // 교사 '학생 화면 보기'용
         break;
       case "stairs": {
         const stair = MapUtil.stairs.find(s => s.id === m.id);
