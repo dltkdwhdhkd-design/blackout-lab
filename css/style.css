@@ -128,11 +128,4 @@ input[type=range], input[type=checkbox] { accent-color: #b52222; }
 #hidden-panel .hp-head { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; } #hidden-panel .hp-head b { margin-right: auto; }
 #hidden-panel .hp-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-top: 1px solid #23242b; }
 @media (max-width: 800px) { #hidden-panel { right: 0; width: 100%; } }
-#spectate { position: absolute; top: 44px; left: 8px; width: min(62vw, 900px); background: #000; border: 2px solid #c33; z-index: 6; box-shadow: 0 6px 30px rgba(0,0,0,.7); }
-#spectate .spec-head { display: flex; gap: 6px; align-items: center; padding: 4px 6px; background: #14080a; font-size: 14px; }
-#spectate .spec-head #spec-info { flex: 1; } #spectate .spec-map { color: #ff6060; font-weight: 700; }
-#spectate .spec-body { position: relative; } #spec-canvas { display: block; width: 100%; }
-#spec-mapflag { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); color: #ff6b6b; font: 700 22px sans-serif; pointer-events: none; }
-#spec-select { max-width: 170px; }
-@media (max-width: 800px) { #spectate { width: calc(100vw - 16px); } }
-#btn-showmon.on { background: #5a1a1e; color: #ffd0d0; border-color: #a33; }
+@media (max-width: 800px) { #btn-showmon.on { background: #5a1a1e; color: #ffd0d0; border-color: #a33; }

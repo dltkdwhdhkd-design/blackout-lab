@@ -137,7 +137,6 @@
       this.snapAcc += dt;
       if (this.snapAcc >= 0.1) { this.snapAcc = 0; for (const w of this.worlds) { MapUtil.use(w.mapState); Net.sendToClients(Sim.snapshot(w), w.team); } }
       this.viewTick = (this.viewTick || 0) + 1; if (this.viewTick % 2 === 0) { HostView.render(); renderHiddenPanel(); }   // 관제 그림은 초당 10번이면 충분
-      if (Spec.id && document.getElementById("s-host-console").style.display !== "none") specRender();   // 학생 화면은 초당 20번
       this.restoreLocal();
       if (this.worlds.length && this.worlds.every(w => w.phase === "end")) $("btn-host-end").textContent = "결과 보기";
     },
@@ -182,53 +181,10 @@
   window.addEventListener("DOMContentLoaded", () => {
     const b = $("btn-hidden"); if (b) b.onclick = () => { const box = $("hidden-panel"); box.style.display = box.style.display === "none" ? "" : "none"; renderHiddenPanel(true); };
   });
-  // ── 교사: 학생 화면 보기 ── 교사 기기가 가진 게임 상태로 그 학생의 1인칭 화면을 다시 그린다
-  const Spec = { id: null, cv: null };
-  function specList() { const out = []; HostGame.worlds.forEach((w, t) => { for (const p of w.players.values()) if (p.id !== HostGame.localId) out.push({ t, p, w }); }); return out; }
-  function specOpen(id) { if (!Assets.spr.monster) Assets.init(); Spec.id = id; $("spectate").style.display = ""; specMenu(); }
-  function specClose() { Spec.id = null; $("spectate").style.display = "none"; }
-  function specStep(dir) { const L = specList(); if (!L.length) return; let i = L.findIndex(e => e.p.id === Spec.id); i = (i + dir + L.length) % L.length; specOpen(L[i].p.id); }
-  function specMenu() {
-    const sel = $("spec-select"); const L = specList();
-    sel.innerHTML = `<option value="">학생 화면 보기…</option>` + L.map(({ t, p }) => `<option value="${p.id}"${p.id === Spec.id ? " selected" : ""}>${t + 1}팀 · ${String(p.name).replace(/[<>&"]/g, "")}</option>`).join("");
-  }
-  function specRender() {
-    if (!Spec.id) return;
-    const L = specList(), e = L.find(e => e.p.id === Spec.id); if (!e) { specClose(); return; }
-    const { w, p, t } = e, cv = $("spec-canvas"), box = cv.parentElement;
-    const W = box.clientWidth, H = Math.round(W * 9 / 16);
-    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
-    const c = cv.getContext("2d");
-    MapUtil.use(w.mapState);
-    const sn = Sim.snapshot(w), now = performance.now();
-    const fuses = MapUtil.fuses();
-    const others = [...w.players.values()].filter(o => o !== p).map(o => ({ x: o.x, y: o.y, a: o.a, down: o.down, esc: o.escaped, hid: !!o.hid, light: o.light, name: o.name }));
-    const ms = w.monsters.map(m => ({ x: m.x, y: m.y, state: m.state, speed: m.speed || 0, a: m.a }));
-    if (p.escaped) { c.fillStyle = "#e8e4d8"; c.fillRect(0, 0, W, H); c.fillStyle = "#222"; c.font = "bold 28px sans-serif"; c.textAlign = "center"; c.fillText("탈출함", W / 2, H / 2); }
-    else {
-      const view = p.hid ? { x: p.hid.x + 0.5, y: p.hid.y + 0.5, a: p.a + Math.PI } : { x: p.x, y: p.y, a: p.a };
-      Fps.render(c, W, H, { pos: view, fuses, fmask: sn.f, exitOpen: !!sn.e, flicker: (p.light || p.down) ? (p.down ? 0.3 : 0.9) : 0, glow: p.light || p.down ? 0 : 0.16,
-        monster: ms[0], monsters: ms, others, now, downed: p.down, moving: false, pitch: 0, gore: !(w.introT > 0), look: p.look || 0, turn: 0,
-        drops: sn.dr, meds: (window.MEDKITS || []).filter((m, i) => !((sn.mk >> i) & 1)), noHand: false });
-      if (p.hid) { c.fillStyle = "rgba(0,0,0,0.6)"; c.fillRect(0, 0, W, H); }
-      if (p.down) { c.fillStyle = "rgba(60,0,0,0.55)"; c.fillRect(0, 0, W, H); }
-    }
-    HostGame.restoreLocal();
-    // 상태 줄
-    const floor = MapUtil.floorAt(p.x, p.y);
-    const st = p.escaped ? "탈출" : p.down ? "쓰러짐" : p.hid ? "사물함에 숨음" : "이동 중";
-    $("spec-info").innerHTML = `<b>${t + 1}팀 ${String(p.name).replace(/[<>&"]/g, "")}</b> · ${floor}층 · ${st} · 손전등 ${p.light ? "켬" : "끔"} · 손 ${"◆".repeat(p.carry || 0) || "없음"}${p.medkit ? " · ✚" : ""}` +
-      (p.mapOpen ? ` <span class="spec-map">전체 지도 보는 중 (${p.mapOpen}층${p.mapSince ? ` · ${Math.floor(w.elapsed - p.mapSince)}초째` : ""})</span>` : "");
-    $("spec-mapflag").style.display = p.mapOpen ? "" : "none";
-  }
   window.addEventListener("DOMContentLoaded", () => {
     const bm = $("btn-showmon"), lab = () => { bm.textContent = HostView.showMon ? "괴물 위치 숨기기" : "괴물 위치 보이기"; bm.classList.toggle("on", !HostView.showMon); };
     lab(); bm.onclick = () => { HostView.setShowMon(!HostView.showMon); lab(); HostView.render(); };
-    $("spec-select").onfocus = specMenu;
-    $("spec-select").onchange = () => { const v = $("spec-select").value; if (v) specOpen(v); };
-    $("spec-close").onclick = specClose; $("spec-prev").onclick = () => specStep(-1); $("spec-next").onclick = () => specStep(1);
   });
-  window.__spec = { open: specOpen, close: specClose, get id() { return Spec.id; } };
   function updateSecondHint() {
     const h = $("second-hint"); if (!h) return; const r = HostGame.settings.requiredFuses || 9;
     const at = r <= 6 ? Math.ceil(r * 2 / 3) : Math.ceil(r / 2);
@@ -286,7 +242,7 @@
   };
 
   function bindSettings() {
-    const map = { "set-time": ["timeLimit", 60], "set-safe": ["safeTime", 1], "set-speed": ["monsterSpeed", 1], "set-monsters": ["monsterCount", 1], "set-req": ["requiredFuses", 1], "set-team": ["teamSize", 1], "set-scare": ["scare", 1], "set-intro": ["intro", 1], "set-map": ["mapMode", 1], "set-fullmap": ["fullMap", 1] };
+    const map = { "set-time": ["timeLimit", 60], "set-safe": ["safeTime", 1], "set-speed": ["monsterSpeed", 1], "set-monsters": ["monsterCount", 1], "set-req": ["requiredFuses", 1], "set-team": ["teamSize", 1], "set-scare": ["scare", 1], "set-intro": ["intro", 1], "set-map": ["mapMode", 1] };
     for (const id in map) {
       const el = $(id); const [key, mul] = map[id];
       el.value = HostGame.settings[key] / mul;
